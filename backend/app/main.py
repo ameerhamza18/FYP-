@@ -26,6 +26,7 @@ from app.security.rate_limit import RateLimitMiddleware
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 settings = get_settings()
+logger = logging.getLogger("trustlayer")
 
 app = FastAPI(
     title="TrustLayer API",
@@ -64,12 +65,20 @@ def _bootstrap_admin() -> None:
 
     db = SessionLocal()
     try:
-        if not db.query(User).filter(User.role == "admin").first():
-            db.add(User(email=settings.admin_email.lower(),
-                        password_hash=hash_password(settings.admin_password),
-                        role="admin"))
-            db.commit()
-            logging.getLogger("trustlayer").info("Bootstrap admin created: %s", settings.admin_email)
+        admin_user = db.query(User).filter(User.role == "admin").first()
+        if admin_user:
+            logger.info("Admin user already exists: %s (no bootstrap needed)", admin_user.email)
+            return
+        
+        logger.info("Creating bootstrap admin with email: %s", settings.admin_email.lower())
+        db.add(User(email=settings.admin_email.lower(),
+                    password_hash=hash_password(settings.admin_password),
+                    role="admin"))
+        db.commit()
+        logger.info("✅ Bootstrap admin created successfully: %s", settings.admin_email.lower())
+    except Exception as e:
+        logger.error("❌ Bootstrap admin creation failed: %s", str(e))
+        db.rollback()
     finally:
         db.close()
 
@@ -84,3 +93,4 @@ def dashboard():
     """Serve the SOC-style admin dashboard (client-side auth via JWT)."""
     static_dir = __import__("pathlib").Path(__file__).parent / "static"
     return FileResponse(static_dir / "dashboard.html")
+
