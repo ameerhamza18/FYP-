@@ -57,3 +57,18 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+# DEBUG: Check admin user exists
+@router.get("/debug/admin-check")
+def debug_admin_check(db: Session = Depends(get_db)):
+    """Debug endpoint to check if admin user exists. Remove in production."""
+    admin = db.query(User).filter(User.role == "admin").first()
+    all_users = db.query(User).all()
+    return {
+        "admin_exists": admin is not None,
+        "admin_email": admin.email if admin else None,
+        "total_users": len(all_users),
+        "all_users": [{"id": u.id, "email": u.email, "role": u.role, "active": u.is_active} for u in all_users]
+    }
+
