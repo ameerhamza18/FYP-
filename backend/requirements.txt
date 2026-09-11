@@ -1,0 +1,17 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+pydantic==2.10.4
+email-validator==2.2.0
+PyJWT==2.10.1
+bcrypt==4.2.1
+joblib==1.4.2
+scikit-learn==1.6.0
+httpx==0.28.1
+pillow==11.1.0
+pytesseract==0.3.13
+python-multipart==0.0.20
+pytest==8.3.4
+
+# Production database driver (required for the Docker/PostgreSQL stack)
+psycopg2-binary==2.9.10

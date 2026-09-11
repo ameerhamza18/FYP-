@@ -1,0 +1,36 @@
+name: TrustLayer CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Generate dataset & train ML model
+        run: |
+          python -m ml.training.generate_dataset
+          python -m ml.training.train_model
+      - name: Run test suite
+        run: python -m pytest tests/ -v
+
+  flutter-analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+        working-directory: apps/mobile
+      - run: flutter analyze
+        working-directory: apps/mobile

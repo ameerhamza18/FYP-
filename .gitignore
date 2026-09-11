@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ML artifacts
+ml/models/*.joblib
+ml/data/*.csv
+ml/evaluation/reports/*.json
+
+# Environment / secrets
+.env
+*.key
+
+# Database
+*.db
+*.sqlite3
+
+# Flutter / Dart
+apps/mobile/.dart_tool/
+apps/mobile/.packages
+apps/mobile/build/
+apps/mobile/.flutter-plugins*
+apps/mobile/ios/Pods/
+apps/mobile/android/.gradle/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / temp
+*.log
+_pdf_extract.txt

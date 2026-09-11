@@ -1,0 +1,17 @@
+# Build context exclusions
+**/__pycache__
+**/.venv
+**/venv
+**/.env
+**/*.db
+**/*.sqlite3
+ml/models/*.joblib
+ml/data/*.csv
+ml/evaluation/reports
+apps/
+docs/
+tests/
+.git
+.github
+**/.DS_Store
+**/Thumbs.db
