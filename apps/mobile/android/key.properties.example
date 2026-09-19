@@ -1,0 +1,8 @@
+# Google Play Store Release Keystore Signing Configuration
+# Copy this file to `android/key.properties` and fill in your generated keystore credentials before building release AAB:
+# flutter build aab --release
+
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=trustlayer_release
+storeFile=../trustlayer-release-key.jks

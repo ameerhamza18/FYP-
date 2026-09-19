@@ -78,7 +78,7 @@ def fuse_scores(
     Channels that produced no evidence are excluded and their weight is
     redistributed, so absence of ML output (cold start) doesn't drag scores.
     """
-    components = {"ml": ml_prob, "rules": rule_score, "intel": intel_score}
+    components = {"ml": ml_prob * 100 if ml_prob is not None else None, "rules": rule_score, "intel": intel_score}
     if url_score is not None:
         components["url"] = url_score
 

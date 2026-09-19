@@ -112,9 +112,4 @@ def get_analysis(analysis_id: int, user: User = Depends(get_current_user),
 
 def _detail(db: Session, analysis_id: int) -> AnalysisDetailOut:
     analysis = db.query(Analysis).filter(Analysis.id == analysis_id).one()
-    out = AnalysisDetailOut.model_validate(analysis)
-    out.indicators = [
-        {"category": i.category, "severity": i.severity, "title": i.title, "detail": i.detail}
-        for i in analysis.indicators
-    ] if analysis.indicators else []
-    return out
+    return AnalysisDetailOut.model_validate(analysis)

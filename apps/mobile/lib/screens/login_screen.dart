@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../services/api_client.dart';
 import '../services/token_store.dart';
+import '../main.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -55,55 +57,99 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: TrustLayerColors.background,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(32),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.shield, size: 64, color: Color(0xFF2563EB)),
-              const SizedBox(height: 8),
-              const Text('TrustLayer', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-              const Text('Stay Safe Online', style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 32),
+              const Icon(Icons.shield, size: 80, color: TrustLayerColors.primary),
+              const SizedBox(height: 16),
+              Text('TrustLayer',
+                  style: GoogleFonts.inter(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: TrustLayerColors.textPrimary
+                  )),
+              Text('Advanced AI Scam Detection',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: TrustLayerColors.textSecondary
+                  )),
+              const SizedBox(height: 48),
               TextField(
                 controller: _email,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email', prefixIcon: Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(),
+                style: TextStyle(color: TrustLayerColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  labelStyle: TextStyle(color: TrustLayerColors.textSecondary),
+                  prefixIcon: Icon(Icons.email_outlined, color: TrustLayerColors.textSecondary),
+                  filled: true,
+                  fillColor: TrustLayerColors.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: TrustLayerColors.primary, width: 2),
+                  ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 20),
               TextField(
                 controller: _password,
                 obscureText: true,
+                style: TextStyle(color: TrustLayerColors.textPrimary),
                 inputFormatters: [FilteringTextInputFormatter.singleLineFormatter],
-                decoration: const InputDecoration(
-                  labelText: 'Password', prefixIcon: Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  labelStyle: TextStyle(color: TrustLayerColors.textSecondary),
+                  prefixIcon: Icon(Icons.lock_outline, color: TrustLayerColors.textSecondary),
+                  filled: true,
+                  fillColor: TrustLayerColors.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: TrustLayerColors.primary, width: 2),
+                  ),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 24),
               if (_error != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(_error!,
+                      style: TextStyle(color: TrustLayerColors.critical, fontSize: 14)),
                 ),
               SizedBox(
                 width: double.infinity,
+                height: 54,
                 child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: TrustLayerColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                   onPressed: _busy ? null : _submit,
                   child: _busy
-                      ? const SizedBox(height: 18, width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(_isRegister ? 'Create account' : 'Sign in'),
+                      ? const SizedBox(height: 24, width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text(_isRegister ? 'Create account' : 'Sign in',
+                          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
               ),
+              const SizedBox(height: 16),
               TextButton(
                 onPressed: () => setState(() { _isRegister = !_isRegister; _error = null; }),
                 child: Text(_isRegister
                     ? 'Already have an account? Sign in'
-                    : 'New here? Create an account'),
+                    : 'New here? Create an account',
+                    style: TextStyle(color: TrustLayerColors.textSecondary)),
               ),
             ],
           ),

@@ -34,3 +34,33 @@ def build_signature(text: str, entities: Dict[str, List[str]]) -> Optional[str]:
 
 def should_flag_campaign(hits: int, distinct_users: int) -> bool:
     return hits >= CAMPAIGN_HIT_THRESHOLD and distinct_users >= DISTINCT_USER_THRESHOLD
+
+
+def trigger_campaign_webhook(webhook_url: Optional[str], campaign_signature: str, hits: int, users: int, snippet: Optional[str] = None) -> bool:
+    """Trigger real-time webhook alert (e.g. Slack/Discord/SOC SIEM) when a campaign is flagged."""
+    if not webhook_url:
+        return False
+    import json
+    import logging
+    import urllib.request
+
+    logger = logging.getLogger("trustlayer.campaign")
+    payload = {
+        "event": "COORDINATED_CAMPAIGN_DETECTED",
+        "signature": campaign_signature,
+        "total_hits": hits,
+        "distinct_users": users,
+        "sample_snippet": snippet or "",
+    }
+    try:
+        req = urllib.request.Request(
+            webhook_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status < 400
+    except Exception as exc:
+        logger.warning("Failed to dispatch campaign webhook to %s: %s", webhook_url, exc)
+        return False
+

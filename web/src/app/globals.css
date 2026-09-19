@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: toggled on <html> by the ThemeToggle / bootstrap script. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------ *
+ * Design tokens. The light theme is the default; `.dark` flips every
+ * variable, so components stay theme-agnostic (dark + white combination).
+ * ------------------------------------------------------------------ */
+:root {
+  --background: #ffffff;
+  --background-subtle: #f7f9fc;
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --border: #e3e8ef;
+  --border-strong: #cbd5e1;
+
+  --foreground: #0b1220;
+  --muted: #5b6b84;
+
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-foreground: #ffffff;
+  --brand-soft: #eff5ff;
+
+  /* Fixed "ink" palette for the always-dark bands (hero, nav, footer). */
+  --ink: #060a14;
+  --ink-surface: #0d1424;
+  --ink-border: #1d2941;
+  --ink-foreground: #f8fafc;
+  --ink-muted: #93a3b8;
+
+  --risk-critical: #dc2626;
+  --risk-high: #ea580c;
+  --risk-medium: #b45309;
+  --risk-low: #047857;
+  --risk-info: #2563eb;
+
+  --shadow-card: 0 1px 2px rgb(9 17 33 / 0.04), 0 8px 24px -12px rgb(9 17 33 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(9 17 33 / 0.05), 0 18px 40px -18px rgb(9 17 33 / 0.22);
+}
+
+.dark {
+  --background: #05080f;
+  --background-subtle: #0a1020;
+  --surface: #0e1626;
+  --surface-muted: #16203a;
+  --border: #1e2a42;
+  --border-strong: #33415c;
+
+  --foreground: #f3f7fc;
+  --muted: #93a3b8;
+
+  --brand: #3b82f6;
+  --brand-hover: #60a5fa;
+  --brand-foreground: #ffffff;
+  --brand-soft: #12203a;
+
+  --ink: #03060d;
+  --ink-surface: #0a1120;
+  --ink-border: #1b2740;
+  --ink-foreground: #f8fafc;
+  --ink-muted: #93a3b8;
+
+  --risk-critical: #fb7185;
+  --risk-high: #fb923c;
+  --risk-medium: #fbbf24;
+  --risk-low: #34d399;
+  --risk-info: #60a5fa;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -14px rgb(0 0 0 / 0.6);
+  --shadow-lift: 0 2px 6px rgb(0 0 0 / 0.45), 0 22px 50px -22px rgb(0 0 0 / 0.75);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-subtle: var(--background-subtle);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border-default: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+
+  --color-ink: var(--ink);
+  --color-ink-surface: var(--ink-surface);
+  --color-ink-border: var(--ink-border);
+  --color-ink-foreground: var(--ink-foreground);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-risk-critical: var(--risk-critical);
+  --color-risk-high: var(--risk-high);
+  --color-risk-medium: var(--risk-medium);
+  --color-risk-low: var(--risk-low);
+  --color-risk-info: var(--risk-info);
+
+  /* Backwards-compatible aliases (older class names still resolve). */
+  --color-primary: var(--brand);
+  --color-text-primary: var(--foreground);
+  --color-text-secondary: var(--muted);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-lift: var(--shadow-lift);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--brand);
+  color: var(--brand-foreground);
+}
+
+/* Keyboard focus that meets WCAG contrast in both themes. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Small set of plain-CSS helpers (predictable across Tailwind versions)
+ * ------------------------------------------------------------------ */
+.tl-grid-bg {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--ink-border) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--ink-border) 55%, transparent) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+.tl-grid-bg-light {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--border) 80%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--border) 80%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.tl-gradient-text {
+  background: linear-gradient(100deg, var(--brand) 0%, #8b5cf6 55%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tl-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.tl-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tl-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+@keyframes tl-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tl-fade-up { animation: tl-fade-up 0.5s ease-out both; }
+
+@keyframes tl-shimmer {
+  100% { transform: translateX(100%); }
+}
+.tl-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-muted);
+}
+.tl-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--border-strong) 45%, transparent), transparent);
+  animation: tl-shimmer 1.4s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .tl-fade-up, .tl-skeleton::after { animation: none; }
+}

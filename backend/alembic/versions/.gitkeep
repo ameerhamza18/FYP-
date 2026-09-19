@@ -1,0 +1,3 @@
+# Placeholder — Alembic auto-generates migration files in this directory.
+# Run:  cd backend && alembic revision --autogenerate -m "initial"
+#       cd backend && alembic upgrade head

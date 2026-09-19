@@ -1,0 +1,443 @@
+﻿================================================================================
+                         TRUSTLAYER -- PROJECT OVERVIEW
+              AI-Powered Scam, Phishing & Social-Engineering Detection Platform
+                              Final Year Project (FYP)
+================================================================================
+
+
+================================================================================
+SECTION 1: PROJECT ABSTRACT / BRIEF
+================================================================================
+
+TrustLayer is an AI-powered, multi-layered cybersecurity platform designed to
+detect and explain scam messages, phishing attempts, and social-engineering
+attacks targeting everyday users in Pakistan and globally.
+
+PROBLEM STATEMENT:
+------------------
+People daily receive suspicious SMS messages, WhatsApp texts, emails, URLs,
+screenshots, fake job offers, investment fraud, fake banking messages, prize
+scams, and impersonation attempts. Existing solutions provide only a binary
+Scam / Not Scam verdict, which is useless for building genuine digital
+resilience and awareness among non-technical users.
+
+SOLUTION:
+---------
+TrustLayer goes far beyond a simple binary verdict. Instead of just saying
+Scam, it answers:
+
+    HIGH RISK -- 91/100
+    Threat Type   : Phishing / Financial Fraud
+    Why           : Suspicious URL, urgency-based social engineering,
+                    credential request, financial impersonation
+    What To Do    : Do not click links. Do not share OTP or passwords.
+                    Report to PTA (9000) and your bank fraud line.
+
+The platform intercepts threats BEFORE they cause harm, provides a full
+explainable breakdown of WHY something is risky, and gives the user clear,
+actionable safety recommendations.
+
+WHAT TRUSTLAYER DETECTS:
+------------------------
+1. Phishing           -- urgency, impersonation, suspicious URLs, credential harvesting
+2. Fake Job Scams     -- upfront payment requests, unrealistic salary, work-from-home fraud
+3. Banking Scams      -- financial impersonation, account blocking threats, OTP/PIN harvesting
+4. Investment Scams   -- guaranteed profit claims, Ponzi schemes, unrealistic return promises
+5. Prize / Lottery    -- lucky draw baits, BISP/government grant impersonation, prize lures
+6. Impersonation      -- FBR, NADRA, Police, HBL, UBL, Meezan Bank, Telenor
+
+SOCIAL ENGINEERING TECHNIQUE DETECTION (8 Techniques):
+-------------------------------------------------------
+  - Authority          : I am calling from your bank / FBR / Police
+  - Urgency            : Act within 10 minutes / Abhi verify karein
+  - Fear               : Your account will be blocked / ho jayega
+  - Reward             : You have won Rs. 50,000 / Inam jeet liya
+  - Scarcity           : Only 2 spots remaining / Limited offer
+  - Trust/Impersonation: Official app / Verified link / Dear Customer
+  - Financial Pressure : Pay registration fee / Send on JazzCash
+  - Credential Harvest : Enter your OTP / PIN share karein
+
+KEY DESIGN DECISIONS:
+---------------------
+1. The AI/LLM is NOT the security decision-maker. Risk scores are produced by a
+   deterministic, auditable fusion engine combining:
+     - ML Classifier (TF-IDF + Logistic Regression, 30% weight)
+     - Rule Engine   (14+ expert security rules, 35% weight)
+     - Threat Intel  (known-bad domain/keyword feed, 20% weight)
+     - URL Analyzer  (static URL risk analysis, 15% weight)
+
+2. The LLM ONLY generates the human-readable explanation AFTER the verdict is
+   already decided. This prevents prompt-injection attacks and hallucinated scores.
+
+3. All analysis is privacy-preserving:
+     - Screenshots are processed in-memory -- never written to disk
+     - Submitted URLs are analyzed statically -- server never fetches them
+     - Content stored as truncated, sanitized snippets + SHA-256 hash only
+
+RESEARCH QUESTIONS (FYP):
+--------------------------
+  RQ1: Can the system classify scam messages with high precision and recall?
+  RQ2: Can it identify psychological manipulation techniques used by scammers?
+  RQ3: How effective are the security controls against real-world attacks?
+  RQ4: What is the system latency and throughput under load?
+
+EVALUATION METRICS:
+-------------------
+  Precision / Recall / F1-Score / ROC-AUC / FPR / FNR / Latency / Throughput
+
+TARGET USERS:
+-------------
+  - General public (mobile app -- non-technical users)
+  - Security analysts and SOC teams (web admin dashboard)
+  - Banks, telecoms, government agencies (API integration)
+
+REGIONAL COVERAGE:
+------------------
+  - English messages (primary)
+  - Roman Urdu messages (EasyPaisa, JazzCash, BISP, banking scams)
+  - URLs (phishing domains, typosquatting, shorteners, IP-literal hosts)
+  - Screenshots (OCR-based text extraction + analysis)
+
+
+================================================================================
+SECTION 2: SOURCE LANGUAGES
+================================================================================
+
++------------------+------------------+----------+----------------------------+
+| Layer            | Language         | Version  | Purpose                    |
++------------------+------------------+----------+----------------------------+
+| Mobile App       | Dart (Flutter)   | >=3.3.0  | Android/iOS mobile client  |
+| Backend API      | Python           | 3.12     | FastAPI REST API, auth     |
+| ML Pipeline      | Python           | 3.12     | Model training/evaluation  |
+| Detection Engine | Python           | 3.12     | NLP, rules, URL, campaigns |
+| Web Dashboard    | TypeScript       | 5.x      | Next.js SOC admin portal   |
+| Web Styling      | CSS (Tailwind)   | v4       | Dashboard UI styling       |
+| DB Migrations    | Python (Alembic) | -        | Schema version control     |
+| Docker Infra     | Dockerfile/YAML  | -        | Container definitions      |
+| Cloud Infra      | HCL (Terraform)  | -        | AWS EC2 deployment         |
+| Android Native   | Kotlin           | 1.9.22   | Android platform entry     |
+| Android Build    | Groovy/Gradle    | -        | build.gradle, settings     |
+| CI/CD Pipeline   | YAML             | -        | GitHub Actions workflow    |
+| Documentation    | Markdown         | -        | Architecture, API, policy  |
++------------------+------------------+----------+----------------------------+
+
+LANGUAGE BREAKDOWN:
+-------------------
+  Python       60%  (Backend API + ML + all detection services)
+  Dart         20%  (Flutter mobile application)
+  TypeScript   15%  (Next.js web admin dashboard)
+  Other         5%  (Kotlin, HCL, Groovy, YAML)
+
+KEY FRAMEWORKS:
+---------------
+  Python     : FastAPI, SQLAlchemy, scikit-learn, PyJWT, bcrypt, pytesseract
+  Dart       : Flutter, http, image_picker, shared_preferences, google_fonts
+  TypeScript : Next.js 15, React 19, Tailwind CSS 4
+  HCL        : Terraform (AWS provider)
+  Kotlin     : Android Embedding v2
+
+
+================================================================================
+SECTION 3: DATABASES
+================================================================================
+
+DATABASE ENVIRONMENTS:
+-----------------------
++---------------+---------------+----------------------------------------------+
+| Environment   | Engine        | Connection / Notes                           |
++---------------+---------------+----------------------------------------------+
+| Development   | SQLite 3      | sqlite:///./trustlayer.db (auto-created)     |
+| Production    | PostgreSQL 16 | postgresql://trustlayer:***@db:5432/trustlayer|
++---------------+---------------+----------------------------------------------+
+
+ORM             : SQLAlchemy 2.0
+MIGRATION TOOL  : Alembic
+ACTUAL DB FILE  : trustlayer/backend/trustlayer.db (106 KB, live dev data)
+
+DATABASE SCHEMA -- 6 TABLES:
+------------------------------
+
+  1. users
+       id, email (unique), password_hash (bcrypt), role (user|admin),
+       is_active, created_at, last_login_at
+
+  2. analyses  [CORE TABLE -- one row per scan]
+       id, user_id (FK), input_type (text|url|screenshot),
+       content_hash (SHA-256), content_snippet (sanitized),
+       risk_score (0-100), risk_level (LOW|MEDIUM|HIGH|CRITICAL),
+       threat_type, ml_score, rule_score, intel_score, url_score,
+       recommendation, explanation, engine_breakdown (JSON),
+       campaign_signature (SHA-256 hash), campaign_flagged,
+       latency_ms, created_at
+
+  3. indicators
+       id, analysis_id (FK), category, severity, title, detail
+
+  4. se_findings
+       id, analysis_id (FK), technique, intensity (LOW|MEDIUM|HIGH), evidence
+
+  5. campaigns
+       id, signature (SHA-256 unique), hits, distinct_users, severity,
+       sample_snippet, first_seen, last_seen
+
+  6. audit_logs  [APPEND-ONLY]
+       id, user_id (nullable), action, resource, ip, user_agent, meta (JSON),
+       created_at
+
+TABLE RELATIONSHIPS:
+--------------------
+  users ---< analyses ---< indicators
+                  |
+                  +------< se_findings
+  campaigns  <-- correlated from analyses.campaign_signature
+  audit_logs <-- every auth + analysis event
+
+MIGRATION COMMANDS:
+-------------------
+  cd backend
+  alembic upgrade head                                     # Apply all migrations
+  alembic revision --autogenerate -m "add_column_name"    # New migration
+  alembic downgrade -1                                     # Rollback one version
+
+
+================================================================================
+SECTION 4: TOOLS AND TECHNOLOGIES
+================================================================================
+
+PYTHON BACKEND LIBRARIES:
+--------------------------
+  FastAPI            0.115.6   REST API framework (async, Swagger/ReDoc)
+  Uvicorn            0.34.0    ASGI production server
+  SQLAlchemy         2.0.36    ORM (Python models to SQL)
+  Pydantic           2.10.4    Request/response validation
+  PyJWT              2.10.1    JSON Web Token auth (HS256)
+  bcrypt             4.2.1     Password hashing (cost factor 12)
+  scikit-learn       1.6.0     TF-IDF + Logistic Regression ML
+  joblib             1.4.2     ML model serialization
+  Tesseract OCR      System    Screenshot-to-text extraction engine
+  pytesseract        0.3.13    Python wrapper for Tesseract
+  Pillow             11.1.0    Image loading and validation
+  python-multipart   0.0.20    File upload parsing
+  httpx              0.28.1    Async HTTP client (test client)
+  psycopg2-binary    2.9.10    PostgreSQL driver (production)
+  email-validator    2.2.0     Email field validation
+  Alembic            latest    Database migration manager
+  pytest             8.3.4     Test runner (85 tests -- all passing)
+
+FLUTTER / DART LIBRARIES:
+--------------------------
+  Flutter SDK        >=3.3.0   Cross-platform mobile framework
+  http               ^1.2.2    HTTP client for API calls
+  http_parser        ^4.0.2    MIME type parsing for uploads
+  image_picker       ^1.1.2    Gallery/camera image selection
+  shared_preferences ^2.3.3    JWT token persistent storage
+  google_fonts       ^6.2.1    Inter + JetBrains Mono fonts
+  flutter_lints      ^4.0.0    Static analysis linting
+
+WEB DASHBOARD LIBRARIES:
+-------------------------
+  Next.js            16.3.5    React framework (App Router, SSR)
+  React              19.2.8    UI component library
+  TypeScript         ^5.x      Static typing for JavaScript
+  Tailwind CSS       ^4.x      Utility-first CSS styling
+  ESLint             ^9.x      Code linting
+  PostCSS            -         CSS processing pipeline
+
+INFRASTRUCTURE AND DEVOPS:
+----------------------------
+  Docker             Container packaging (python:3.12-slim + node:20-alpine)
+  Docker Compose v2  Multi-service orchestration (API + PostgreSQL + Web)
+  Terraform (AWS)    Infrastructure-as-Code: EC2, security groups
+  GitHub Actions     CI/CD pipeline (4 parallel jobs on every push)
+  Nginx              Reverse proxy + HTTPS termination
+  Certbot            Free TLS/SSL certificate automation (Let's Encrypt)
+
+CI/CD PIPELINE (GitHub Actions -- 4 Parallel Jobs):
+----------------------------------------------------
+  Job 1: backend-tests  -- Dataset gen -> ML train -> 85 pytest tests
+  Job 2: web-build      -- npm ci -> TypeScript check -> Next.js build
+  Job 3: docker-images  -- Build API + Web Docker images
+  Job 4: flutter-analyze -- flutter pub get + flutter analyze
+
+SECURITY TOOLS (BUILT-IN):
+----------------------------
+  STRIDE Threat Model        14 threats mapped to mitigations
+  OWASP API Top-10 policy    Security control mapping document
+  run_security_checks.py     Ethical self-attack suite:
+                               - Unauthenticated access bypass
+                               - Forged JWT tokens
+                               - RBAC bypass attempts
+                               - BOLA object-level auth bypass
+                               - SQL injection payloads
+                               - Prompt-injection attacks
+                               - Malicious file uploads
+                               - Login rate limiting
+  Sliding-window rate limiter  Custom FastAPI middleware
+  LLM Guard (llm_guard.py)     Prompt-injection scanner + output guard
+  Append-only audit log        All login, scan, delete events persisted
+
+ML PIPELINE:
+-------------
+  Synthetic Dataset Generator  6,000 balanced messages (scam vs. ham)
+  TF-IDF Vectorizer            Word + character n-gram features
+  Logistic Regression          Binary scam/ham classifier
+  Evaluation Script            Precision, Recall, F1, ROC-AUC, FPR, FNR,
+                               latency, throughput
+  Output                       ml/evaluation/reports/evaluation_report.json
+
+API ENDPOINTS SUMMARY:
+-----------------------
+  POST   /api/auth/register             Register new user
+  POST   /api/auth/login                Login and get JWT token
+  GET    /api/auth/me                   Get current user profile
+  DELETE /api/auth/me                   Delete account (Play Store compliance)
+  POST   /api/analyze/text              Analyze SMS/WhatsApp/email text
+  POST   /api/analyze/url               Analyze a suspicious URL
+  POST   /api/analyze/screenshot        OCR + analyze a screenshot
+  GET    /api/analyze/history           User's recent threat history
+  GET    /api/admin/stats               SOC headline metrics (admin)
+  GET    /api/admin/analyses            Paginated org-wide threat feed (admin)
+  GET    /api/admin/campaigns           Campaign registry (admin)
+  GET    /api/admin/audit-logs          Audit trail (admin)
+  GET    /api/admin/users               User roster (admin)
+  GET    /api/admin/export/audit-logs/csv    Export audit CSV (admin)
+  GET    /api/admin/export/analyses/csv      Export threats CSV (admin)
+
+
+================================================================================
+SECTION 5: PROJECT DIRECTORY STRUCTURE
+================================================================================
+
+trustlayer/
++-- apps/mobile/                     Flutter mobile app
+|   +-- lib/
+|   |   +-- main.dart                App entry, theme, splash screen
+|   |   +-- screens/                 home, login, result screens
+|   |   +-- services/                api_client.dart, token_store.dart
+|   |   +-- models/                  analysis_result.dart
+|   +-- android/                     Android platform layer (Play Store)
+|   |   +-- app/build.gradle         Release config (SDK 34, minSdk 21)
+|   |   +-- app/src/main/
+|   |   |   +-- AndroidManifest.xml  Permissions + activity declaration
+|   |   |   +-- kotlin/.../MainActivity.kt   Kotlin FlutterActivity
+|   |   +-- key.properties.example   Signing keystore template
+|   +-- pubspec.yaml                 Flutter dependencies
+|
++-- backend/
+|   +-- app/
+|   |   +-- main.py                  FastAPI app + CORS + middleware
+|   |   +-- config.py                Environment secrets management
+|   |   +-- database.py              SQLAlchemy engine + session
+|   |   +-- models.py                6 ORM table models
+|   |   +-- schemas.py               Pydantic I/O schemas
+|   |   +-- routers/                 auth.py, analyze.py, admin.py
+|   |   +-- security/                auth, audit, validation, rate_limit, llm_guard
+|   |   +-- services/                analysis_engine.py (main orchestrator)
+|   +-- alembic.ini                  Alembic migration config
+|   +-- alembic/                     env.py + versions/
+|   +-- requirements.txt             Python dependencies (18 packages)
+|   +-- trustlayer.db                SQLite dev database (106 KB)
+|
++-- services/
+|   +-- nlp/                         preprocessing.py, classifier.py, se_techniques.py
+|   +-- vision/                      ocr.py (in-memory Tesseract)
+|   +-- url_intelligence/            analyzer.py (static, no network calls)
+|   +-- threat_engine/               rule_engine.py, risk_scoring.py,
+|   |                                threat_intel.py, campaign_detector.py
+|   +-- llm/                         explainer.py + template fallback
+|
++-- ml/
+|   +-- training/                    generate_dataset.py, templates.py, train_model.py
+|   +-- evaluation/                  evaluate.py + reports/
+|   +-- models/                      scam_model.joblib (337 KB trained model)
+|
++-- security/
+|   +-- policies/security-policy.md  OWASP API Top-10 control mapping
+|   +-- threat-model/threat-model.md STRIDE analysis (14 threats)
+|   +-- security-tests/run_security_checks.py  Ethical self-attack suite
+|
++-- infrastructure/
+|   +-- docker/                      Dockerfile, Dockerfile.web, docker-compose.yml
+|   +-- terraform/main.tf            AWS EC2 + security groups
+|
++-- tests/                           85 pytest tests (all passing)
+|   conftest.py, test_api.py, test_campaign_llm_guard.py,
+|   test_preprocessing.py, test_production_readiness.py, test_rate_limit.py,
+|   test_se_techniques.py, test_threat_engine.py, test_url_analyzer.py
+|
++-- web/src/app/                     Next.js pages
+|   login/, analyze/, dashboard/, privacy/
+|
++-- docs/                            api.md, architecture.md
++-- .github/workflows/ci.yml         GitHub Actions CI (4 jobs)
++-- demo_live.py                     End-to-end live demo script
++-- PROJECT_OVERVIEW.txt             This file
++-- README.md                        Full project README
+
+
+================================================================================
+SECTION 6: QUICK START COMMANDS
+================================================================================
+
+DEVELOPMENT (LOCAL -- SQLITE AUTO-CREATED):
+--------------------------------------------
+  cd backend
+  pip install -r requirements.txt
+  uvicorn app.main:app --reload
+  # API available at: http://localhost:8000
+  # Swagger docs at:  http://localhost:8000/docs
+
+TRAIN ML MODEL:
+----------------
+  python -m ml.training.generate_dataset
+  python -m ml.training.train_model
+  python -m ml.evaluation.evaluate
+
+RUN ALL TESTS:
+---------------
+  pytest tests/ -v
+  # Expected: 85 passed
+
+PRODUCTION (DOCKER + POSTGRESQL):
+-----------------------------------
+  cp backend/.env.example backend/.env   # Fill in SECRET_KEY, ADMIN_PASSWORD
+  docker compose -f infrastructure/docker/docker-compose.yml up --build
+  # API: http://localhost:8001
+  # Web: http://localhost:3000
+
+WEB DASHBOARD (DEV):
+---------------------
+  cd web && npm install && npm run dev
+  # Visit: http://localhost:3000
+
+CLOUD DEPLOYMENT (AWS):
+------------------------
+  cd infrastructure/terraform
+  terraform init
+  terraform apply -var key_name=your-ssh-key
+
+FLUTTER MOBILE APP:
+--------------------
+  cd apps/mobile
+  flutter pub get
+  flutter run                         # Development (debug)
+  flutter build aab --release         # Play Store release AAB
+
+SECURITY SELF-ATTACK TESTS:
+-----------------------------
+  python security/security-tests/run_security_checks.py http://localhost:8000
+
+LIVE END-TO-END DEMO:
+----------------------
+  python demo_live.py http://127.0.0.1:8000
+
+DATABASE MIGRATIONS (PRODUCTION):
+-----------------------------------
+  cd backend && alembic upgrade head
+
+
+================================================================================
+                         END OF PROJECT OVERVIEW
+================================================================================
+Generated: 2026-09-17 | TrustLayer FYP | All rights reserved
+================================================================================

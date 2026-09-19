@@ -1,0 +1,58 @@
+# TrustLayer Web — production image
+#
+# Three stages: install deps -> build -> minimal runtime.
+# `output: "standalone"` (next.config.ts) makes the runtime stage ship only the
+# server bundle it actually executes, instead of the whole node_modules tree.
+FROM node:20-alpine AS base
+# libc6-compat is required by the Next.js SWC binaries on Alpine/musl.
+RUN apk add --no-cache libc6-compat
+
+# Use a regional npm mirror (significantly faster on Asian/PK networks) and
+# tolerate a lossy link while 'npm ci' downloads ~500 tarballs; on a fast
+# EU/US connection the default registry resolves and this is unnecessary.
+ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
+    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_TIMEOUT=600000
+
+# 1. Install dependencies (cached unless the lockfile changes)
+FROM base AS deps
+WORKDIR /app
+COPY web/package.json web/package-lock.json* ./
+RUN npm ci
+
+# 2. Build the application
+FROM base AS builder
+WORKDIR /app
+
+# NEXT_PUBLIC_* vars are inlined into the client bundle at BUILD time, so they
+# must be present here — a runtime `environment:` entry in compose is too late.
+ARG NEXT_PUBLIC_API_URL=http://localhost:8001/api
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY web .
+RUN npm run build
+
+# 3. Minimal runtime
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 3000
+ENV PORT=3000
+# Must bind on all interfaces so the port mapping works.
+ENV HOSTNAME=0.0.0.0
+
+CMD ["node", "server.js"]

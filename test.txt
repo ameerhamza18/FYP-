@@ -1,0 +1,26 @@
+# TrustLayer Test Suite - Scan Examples
+
+## 1. SAFE EXAMPLES (Should be LOW risk)
+- "Hi Sarah, are we still meeting at 3 PM for the project review?"
+- "Your appointment with Dr. Smith is confirmed for tomorrow at 10 AM."
+- "Check out the official documentation at https://docs.python.org"
+- "The weather today is sunny with a high of 25 degrees."
+
+## 2. SUSPICIOUS TEXT (Should be MEDIUM to HIGH risk)
+- "URGENT: Your account has been compromised! Please verify your identity immediately by clicking the link below to avoid permanent suspension."
+- "Congratulations! You've won a $1,000 Amazon gift card! Claim your prize now by providing your shipping address and credit card details for verification."
+- "This is the IRS. You have an outstanding tax debt of $4,500. To avoid legal action and immediate arrest, call our agent at +1-800-555-0199 now."
+- "Hey, I found your lost wallet! Just pay the courier fee of $20 via Bitcoin and I'll send it back to you immediately."
+
+## 3. SUSPICIOUS URLS (Should be HIGH to CRITICAL risk)
+- http://secure-bank-login-verify.com/update-password
+- http://amaz0n-rewards-claim.net/free-gift
+- http://paypal-account-security-alert.info/login
+- http://microsoft-support-help-desk.xyz/ticket-12345
+- http://bit.ly/suspicious-short-link-example
+
+## 4. MIXED MESSAGES (Text + URL) (Should be HIGH to CRITICAL risk)
+- "Your Netflix subscription has expired. Please update your payment method at http://netflix-payment-update.com to continue watching."
+- "Package Delivery Alert: Your shipment #TRK99281 is held at our warehouse. Pay the $2.50 customs fee at http://postal-service-pay.top to receive your package."
+- "Attention! Your Apple ID is locked for security reasons. Log in to http://apple-id-security-verify.org to unlock it now."
+- "Get a free iPhone 15 Pro Max today! Just complete a short survey at http://iphone-giveaway-2024.biz/claim."

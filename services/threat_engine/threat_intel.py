@@ -28,6 +28,9 @@ KNOWN_MALICIOUS_KEYWORDS: List[Tuple[str, str]] = [
     ("guaranteed profit", "Investment scam claim"),
     ("whatsapp group earning", "Task/earning scam lure"),
     ("registration fee", "Job scam fee request"),
+    ("account block ho gaya", "Roman Urdu account-suspension threat"),
+    ("inam jeet liya", "Roman Urdu prize scam lure"),
+    ("bisp scheme inam", "Roman Urdu BISP/government grant lure"),
 ]
 
 SUSPICIOUS_SENDER_TLDS = {"tk", "ml", "ga", "cf", "gq", "xyz", "top"}

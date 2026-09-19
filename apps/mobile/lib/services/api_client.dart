@@ -8,10 +8,22 @@ import '../models/analysis_result.dart';
 import 'token_store.dart';
 
 /// TrustLayer API client.
-/// Set [ApiConfig.baseUrl] to your backend, e.g. http://10.0.2.2:8000 for the
-/// Android emulator against a local FastAPI server.
+///
+/// [ApiConfig.baseUrl] must point at the running backend. The Docker Compose
+/// stack publishes the API on host port **8001** (see
+/// infrastructure/docker/docker-compose.yml), so:
+///
+///   * Android emulator  -> http://10.0.2.2:8001
+///   * iOS simulator     -> http://localhost:8001
+///   * physical device   -> http://<your-LAN-ip>:8001
+///
+/// Override at build time without editing this file:
+///   flutter run --dart-define=API_BASE_URL=http://192.168.1.10:8001
 class ApiConfig {
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://10.0.2.2:8001',
+  );
 }
 
 class ApiException implements Exception {
@@ -74,6 +86,15 @@ class TrustApiClient {
   }
 
   Future<void> logout() => TokenStore.clear();
+
+  Future<void> deleteAccount() async {
+    final r = await http.delete(
+      Uri.parse('${ApiConfig.baseUrl}/api/auth/me'),
+      headers: _headers(await _token()),
+    );
+    _decode(r);
+    await TokenStore.clear();
+  }
 
   // -------------------------------------------------------------- analysis
   Future<AnalysisResult> analyzeText(String text, {String source = 'sms'}) async {

@@ -57,3 +57,20 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.delete("/me", status_code=status.HTTP_200_OK)
+def delete_me(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete current user account and data (Google Play Policy requirement)."""
+    user_id = user.id
+    email = user.email
+    audit(db, "ACCOUNT_DELETED", user_id=user_id, resource=email,
+          ip=request.client.host if request.client else None)
+    
+    # Clean up user's analyses and findings
+    from app.models import Analysis
+    db.query(Analysis).filter(Analysis.user_id == user_id).delete()
+    db.delete(user)
+    db.commit()
+    return {"status": "success", "message": f"Account {email} permanently deleted"}
+

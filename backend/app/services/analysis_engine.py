@@ -130,6 +130,19 @@ def _persist_campaign(db: Session, analysis: Analysis, campaign_signature: Optio
     )
     if campaign_detector.should_flag_campaign(campaign.hits, campaign.distinct_users):
         analysis.campaign_flagged = True
+        # Fire real-time webhook alert (Slack / Discord / SOC SIEM).
+        try:
+            from app.config import get_settings
+            webhook_url = get_settings().campaign_webhook_url or None
+            campaign_detector.trigger_campaign_webhook(
+                webhook_url=webhook_url,
+                campaign_signature=campaign_signature,
+                hits=campaign.hits,
+                users=campaign.distinct_users,
+                snippet=campaign.sample_snippet,
+            )
+        except Exception as _wh_exc:
+            logger.debug("Webhook skipped: %s", _wh_exc)
 
 
 def analyze_content(user_id: int, input_type: str, text: str, source: str,

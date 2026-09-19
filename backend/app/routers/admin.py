@@ -1,5 +1,6 @@
 """Admin SOC-style Security Center API (role-restricted, OWASP API5)."""
 import datetime as dt
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
@@ -7,10 +8,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Analysis, Campaign, SEFinding, User
-from app.schemas import AdminStatsOut, CampaignOut
+from app.schemas import AdminAnalysisOut, AdminAnalysisPage, AdminStatsOut, CampaignOut
 from app.security.auth import require_admin
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+RISK_LEVELS = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+INPUT_TYPES = ("text", "url", "screenshot")
 
 
 @router.get("/stats", response_model=AdminStatsOut)
@@ -64,6 +68,62 @@ def stats(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     )
 
 
+@router.get("/analyses", response_model=AdminAnalysisPage)
+def analyses(
+    limit: int = 25,
+    offset: int = 0,
+    risk_level: Optional[str] = None,
+    input_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Paginated, filterable threat feed powering the SOC dashboard.
+
+    Kept separate from /api/analyze/history (which is strictly per-user) so the
+    SOC view has organisation-wide visibility without weakening BOLA rules.
+    """
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+
+    query = (
+        db.query(Analysis, User.email)
+        .join(User, Analysis.user_id == User.id)
+    )
+    if risk_level and risk_level.upper() in RISK_LEVELS:
+        query = query.filter(Analysis.risk_level == risk_level.upper())
+    if input_type and input_type.lower() in INPUT_TYPES:
+        query = query.filter(Analysis.input_type == input_type.lower())
+
+    total = query.count()
+    rows = (
+        query.order_by(Analysis.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    # Build models explicitly (avoids the "declared type vs. raw dict" pitfall
+    # that Pydantic only surfaces as a serialization warning).
+    items = [
+        AdminAnalysisOut(
+            id=a.id,
+            user_id=a.user_id,
+            user_email=email,
+            input_type=a.input_type,
+            risk_score=a.risk_score,
+            risk_level=a.risk_level,
+            threat_type=a.threat_type,
+            campaign_flagged=a.campaign_flagged,
+            latency_ms=a.latency_ms,
+            content_snippet=a.content_snippet,
+            created_at=a.created_at,
+        )
+        for a, email in rows
+    ]
+
+    return AdminAnalysisPage(total=total, limit=limit, offset=offset, items=items)
+
+
 @router.get("/campaigns", response_model=list[CampaignOut])
 def campaigns(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     return (
@@ -95,3 +155,52 @@ def users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
          "is_active": u.is_active, "created_at": str(u.created_at)}
         for u in db.query(User).order_by(User.id).all()
     ]
+
+
+@router.get("/export/audit-logs/csv")
+def export_audit_logs_csv(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Export audit logs as CSV file for SOC compliance."""
+    import csv
+    import io
+    from fastapi.responses import Response
+    from app.models import AuditLog
+
+    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).all()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "user_id", "action", "resource", "ip", "user_agent", "created_at"])
+    for l in logs:
+        writer.writerow([l.id, l.user_id, l.action, l.resource, l.ip, l.user_agent, l.created_at])
+    
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=trustlayer_audit_logs.csv"},
+    )
+
+
+@router.get("/export/analyses/csv")
+def export_analyses_csv(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Export threat analyses feed as CSV file for security reporting."""
+    import csv
+    import io
+    from fastapi.responses import Response
+
+    rows = (
+        db.query(Analysis, User.email)
+        .join(User, Analysis.user_id == User.id)
+        .order_by(Analysis.created_at.desc())
+        .all()
+    )
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["analysis_id", "user_email", "input_type", "risk_score", "risk_level", "threat_type", "campaign_flagged", "created_at"])
+    for a, email in rows:
+        writer.writerow([a.id, email, a.input_type, a.risk_score, a.risk_level, a.threat_type, a.campaign_flagged, a.created_at])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=trustlayer_threat_analyses.csv"},
+    )
+

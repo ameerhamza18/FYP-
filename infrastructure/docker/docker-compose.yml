@@ -1,8 +1,12 @@
 # TrustLayer — full local/production stack
 # Usage:  docker compose -f infrastructure/docker/docker-compose.yml up --build
+#
+# Secrets come from infrastructure/docker/.env (copy .env.example and fill in).
+# The stack refuses to start without SECRET_KEY and ADMIN_PASSWORD.
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: trustlayer
       POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me-in-production}
@@ -13,24 +17,56 @@ services:
       test: ["CMD-SHELL", "pg_isready -U trustlayer"]
       interval: 5s
       retries: 10
+      start_period: 10s
 
   api:
     build:
-      context: ../..
+      context: ../..      # repo root: the image needs backend/, services/ and ml/
       dockerfile: infrastructure/docker/Dockerfile
+    restart: unless-stopped
     environment:
       APP_ENV: production
       DEBUG: "false"
       DATABASE_URL: postgresql://trustlayer:${DB_PASSWORD:-change-me-in-production}@db:5432/trustlayer
-      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in infrastructure/docker/.env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@trustlayer.local}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in infrastructure/docker/.env}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "8001:8000"   # host 8001 → container 8000 (host 8000 is used by another stack)
+      - "8001:8000"   # host 8001 → container 8000
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  web:
+    build:
+      context: ../..      # repo root: the image needs the web/ directory
+      dockerfile: infrastructure/docker/Dockerfile.web
+      args:
+        # Baked into the client bundle at build time (see Dockerfile.web).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001/api}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001/api}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   pgdata:

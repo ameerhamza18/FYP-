@@ -123,6 +123,30 @@ class CampaignOut(BaseModel):
     last_seen: object
 
 
+class AdminAnalysisOut(BaseModel):
+    """Flattened analysis row for the SOC threat feed, including its owner."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    user_email: Optional[str] = None
+    input_type: str
+    risk_score: int
+    risk_level: str
+    threat_type: str
+    campaign_flagged: bool
+    latency_ms: Optional[float] = None
+    content_snippet: str
+    created_at: object
+
+
+class AdminAnalysisPage(BaseModel):
+    """Paginated envelope for the SOC threat feed."""
+    total: int
+    limit: int
+    offset: int
+    items: list[AdminAnalysisOut]
+
+
 class AdminStatsOut(BaseModel):
     total_analyses: int
     high_risk: int

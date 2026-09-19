@@ -109,6 +109,12 @@ class Settings:
         default_factory=lambda: _env("ADMIN_PASSWORD", "Admin@12345")
     )
 
+    # --- Campaign webhook alert ---
+    campaign_webhook_url: str = field(
+        default_factory=lambda: _env("CAMPAIGN_WEBHOOK_URL", "")
+    )
+
+
     @property
     def max_upload_size_bytes(self) -> int:
         return self.max_upload_size_mb * 1024 * 1024
@@ -122,4 +128,61 @@ class Settings:
 def get_settings() -> Settings:
     """Return a cached singleton Settings instance."""
     return Settings()
+
+
+# ------------------------------------------------------- production readiness
+# Values that must never reach a production deployment.
+_INSECURE_SECRET_KEYS = {
+    "", "change-me-in-production", "changeme", "secret", "dev", "test",
+    "test-secret-key-not-for-production", "your-secret-key",
+}
+_INSECURE_ADMIN_PASSWORDS = {
+    "", "admin", "admin123", "admin@12345", "password", "passw0rd123",
+    "changeme", "change-me-in-production",
+}
+
+
+def assert_production_ready(settings: Settings) -> None:
+    """Fail fast when a production deployment is insecurely configured.
+
+    A misconfigured production stack is far more dangerous than one that
+    refuses to boot, so this raises instead of merely logging a warning.
+    Only enforced when APP_ENV=production; development and test are exempt.
+    """
+    if not settings.is_production:
+        return
+
+    problems: list[str] = []
+
+    if not _env("SECRET_KEY"):
+        problems.append(
+            "SECRET_KEY must be set explicitly (the auto-generated fallback "
+            "changes on every restart and invalidates all sessions)."
+        )
+    elif settings.secret_key.lower() in _INSECURE_SECRET_KEYS or len(settings.secret_key) < 32:
+        problems.append("SECRET_KEY is a well-known/weak value or shorter than 32 characters.")
+
+    if not _env("ADMIN_PASSWORD"):
+        problems.append("ADMIN_PASSWORD must be set explicitly.")
+    elif settings.admin_password.lower() in _INSECURE_ADMIN_PASSWORDS or len(settings.admin_password) < 12:
+        problems.append("ADMIN_PASSWORD is a known default or shorter than 12 characters.")
+
+    if settings.database_url.startswith("sqlite"):
+        problems.append("DATABASE_URL must point at PostgreSQL in production (SQLite is development-only).")
+
+    if "*" in settings.cors_origins:
+        problems.append("CORS_ORIGINS must not contain '*' while credentials are enabled.")
+
+    if settings.debug:
+        problems.append("DEBUG must be false in production (it leaks stack traces).")
+
+    if not settings.rate_limit_enabled:
+        problems.append("RATE_LIMIT_ENABLED must stay on in production.")
+
+    if problems:
+        raise RuntimeError(
+            "Refusing to start: insecure production configuration.\n  - "
+            + "\n  - ".join(problems)
+            + "\nSee .env.example for the required variables."
+        )
 

@@ -80,6 +80,16 @@ RULES: List[Dict] = [
         "severity": "HIGH", "weight": 15, "title": "Direct money transfer demand",
         "pattern": r"\b(send|transfer|deposit)\s+(rs\.?\s?\d|pkr|money|funds)\b",
     },
+    {
+        "id": "R015", "category": "Financial", "threat_type": "Financial Fraud",
+        "severity": "CRITICAL", "weight": 25, "title": "Roman Urdu account blocking threat",
+        "pattern": r"\b(account|card|sim|wallet)\s+(block|band)\s+(ho\s+gaya|kar\s+diya|ho\s+jaega|ho\s+jayega)\b",
+    },
+    {
+        "id": "R016", "category": "Reward", "threat_type": "Prize Scam",
+        "severity": "HIGH", "weight": 20, "title": "Roman Urdu lottery/BISP scam bait",
+        "pattern": r"\b(bisp|ehsaas|benazir|inam|lottery)\b.{0,40}\b(jeet|mil\s+gaya|mubarak|paise)\b",
+    },
 ]
 
 SEVERITY_WEIGHT_MULTIPLIER = {"LOW": 0.5, "MEDIUM": 0.75, "HIGH": 1.0, "CRITICAL": 1.2}
