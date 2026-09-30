@@ -46,6 +46,13 @@ def _env_bool(key: str, default: bool) -> bool:
     return os.environ.get(key, str(default)).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _env_float(key: str, default: float) -> float:
+    try:
+        return float(os.environ.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
 @dataclass(frozen=True)
 class Settings:
     """Immutable application settings."""
@@ -109,9 +116,52 @@ class Settings:
         default_factory=lambda: _env("ADMIN_PASSWORD", "Admin@12345")
     )
 
+    # --- Encryption at rest (application-layer field encryption) ---
+    # Fernet key(s) protecting free-text personal data before it is persisted.
+    # Required in production; derived from SECRET_KEY in development/test.
+    # Generate with: python -m app.scripts.generate_key
+    field_encryption_key: str = field(
+        default_factory=lambda: _env("FIELD_ENCRYPTION_KEY", "")
+    )
+    # Retired keys kept for decryption during a rotation (comma separated).
+    field_encryption_key_old: str = field(
+        default_factory=lambda: _env("FIELD_ENCRYPTION_KEY_OLD", "")
+    )
+
+    # --- Data retention (storage limitation / GDPR-PDPA) ---
+    retention_analysis_days: int = field(
+        default_factory=lambda: _env_int("RETENTION_ANALYSIS_DAYS", 90)
+    )
+    retention_audit_days: int = field(
+        default_factory=lambda: _env_int("RETENTION_AUDIT_DAYS", 365)
+    )
+
+    # --- Login lockout (per-account brute-force backoff) ---
+    login_max_failures: int = field(
+        default_factory=lambda: _env_int("LOGIN_MAX_FAILURES", 5)
+    )
+    login_lockout_seconds: int = field(
+        default_factory=lambda: _env_int("LOGIN_LOCKOUT_SECONDS", 900)
+    )
+
+    # --- Distributed rate limiting (optional; memory backend when unset) ---
+    # Set REDIS_URL to share counters across replicas. The redis package is
+    # installed but only imported when a URL is configured.
+    redis_url: str = field(default_factory=lambda: _env("REDIS_URL", ""))
+
+    # --- Error tracking (optional) ---
+    sentry_dsn: str = field(default_factory=lambda: _env("SENTRY_DSN", ""))
+    sentry_traces_sample_rate: float = field(
+        default_factory=lambda: _env_float("SENTRY_TRACES_SAMPLE_RATE", 0.0)
+    )
+
     # --- Campaign webhook alert ---
     campaign_webhook_url: str = field(
         default_factory=lambda: _env("CAMPAIGN_WEBHOOK_URL", "")
+    )
+    # Off by default: the alert carries campaign metadata, not message bodies.
+    campaign_webhook_include_snippet: bool = field(
+        default_factory=lambda: _env_bool("CAMPAIGN_WEBHOOK_INCLUDE_SNIPPET", False)
     )
 
 
@@ -178,6 +228,36 @@ def assert_production_ready(settings: Settings) -> None:
 
     if not settings.rate_limit_enabled:
         problems.append("RATE_LIMIT_ENABLED must stay on in production.")
+
+    # Field-level encryption of persisted message content. Without an explicit
+    # key the data would be encrypted with one derived from SECRET_KEY and a
+    # key rotation would silently make every stored snippet unreadable.
+    if not _env("FIELD_ENCRYPTION_KEY"):
+        problems.append(
+            "FIELD_ENCRYPTION_KEY must be set (generate with: "
+            "python -m app.scripts.generate_key). It protects stored message "
+            "content; losing it makes existing rows unreadable."
+        )
+    else:
+        try:
+            from app.security.crypto import validate_key_material
+
+            validate_key_material(_env("FIELD_ENCRYPTION_KEY"),
+                                  _env("FIELD_ENCRYPTION_KEY_OLD"))
+        except ValueError as exc:
+            problems.append(f"FIELD_ENCRYPTION_KEY is unusable: {exc}")
+
+    if settings.retention_analysis_days <= 0 or settings.retention_audit_days <= 0:
+        problems.append(
+            "RETENTION_ANALYSIS_DAYS and RETENTION_AUDIT_DAYS must be positive "
+            "so stored personal data is actually expired."
+        )
+
+    if settings.campaign_webhook_url and not settings.campaign_webhook_url.startswith("https://"):
+        problems.append("CAMPAIGN_WEBHOOK_URL must use HTTPS (it leaves the deployment).")
+
+    if settings.sentry_dsn and not settings.sentry_dsn.startswith("https://"):
+        problems.append("SENTRY_DSN must use HTTPS.")
 
     if problems:
         raise RuntimeError(

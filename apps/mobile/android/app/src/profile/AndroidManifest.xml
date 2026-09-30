@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required on profile builds: the Flutter tool attaches to the app to
+         collect performance traces. Not merged into release builds. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+</manifest>

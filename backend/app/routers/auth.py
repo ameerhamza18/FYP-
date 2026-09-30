@@ -13,7 +13,13 @@ from app.database import get_db
 from app.models import User
 from app.schemas import LoginIn, RegisterIn, TokenOut, UserOut
 from app.security.audit import audit
-from app.security.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.security.auth import (
+    access_token_ttl_seconds,
+    create_access_token,
+    get_current_user,
+    hash_password,
+    verify_password,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger("trustlayer.auth")
@@ -51,7 +57,33 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
     audit(db, "LOGIN", user_id=user.id, resource=user.email,
           ip=request.client.host if request.client else None,
           user_agent=request.headers.get("user-agent"))
-    return TokenOut(access_token=create_access_token(user), role=user.role)
+    return TokenOut(
+        access_token=create_access_token(user),
+        role=user.role,
+        expires_in=access_token_ttl_seconds(),
+    )
+
+
+@router.post("/refresh", response_model=TokenOut)
+def refresh(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Extend a still-valid session by issuing a fresh access token.
+
+    Access tokens are deliberately short-lived (60 min by default), but a user
+    halfway through analysing a message must not be thrown back to the login
+    screen. Clients call this while the user is active, producing a sliding
+    session: activity extends it, idleness lets it lapse.
+
+    This is intentionally NOT a refresh-token flow. It requires a currently
+    valid token, so nothing here can resurrect an already-expired credential —
+    an attacker holding a dead token gains nothing.
+    """
+    audit(db, "TOKEN_REFRESH", user_id=user.id, resource=user.email,
+          ip=request.client.host if request.client else None)
+    return TokenOut(
+        access_token=create_access_token(user),
+        role=user.role,
+        expires_in=access_token_ttl_seconds(),
+    )
 
 
 @router.get("/me", response_model=UserOut)

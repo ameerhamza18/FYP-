@@ -73,3 +73,6 @@ jobs:
         working-directory: apps/mobile
       - run: flutter analyze
         working-directory: apps/mobile
+      - name: Mobile unit & widget tests
+        working-directory: apps/mobile
+        run: flutter test

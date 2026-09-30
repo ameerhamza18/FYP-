@@ -50,6 +50,95 @@ def test_wrong_password_rejected(client):
     assert r.status_code == 401
 
 
+# ------------------------------------------------------ session extension
+_REFRESH_USER = {"email": "refresh@example.com", "password": "Passw0rd123"}
+
+
+def _refresh_user_token(client) -> str:
+    """Register idempotently, then log in and return an access token."""
+    client.post("/api/auth/register", json=_REFRESH_USER)
+    r = client.post("/api/auth/login", json=_REFRESH_USER)
+    assert r.status_code == 200, r.text
+    return r.json()["access_token"]
+
+
+def test_login_reports_token_lifetime(client):
+    """Clients need to know when to refresh without hardcoding the TTL."""
+    client.post("/api/auth/register", json=_REFRESH_USER)
+    r = client.post("/api/auth/login", json=_REFRESH_USER)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["token_type"] == "bearer"
+    assert body["expires_in"] == 3600          # ACCESS_TOKEN_EXPIRE_MINUTES default (60)
+    assert body["role"] in ("user", "admin")
+
+
+def test_refresh_issues_usable_token(client):
+    """A live session is extended without asking for credentials again."""
+    first = _refresh_user_token(client)
+
+    r = client.post("/api/auth/refresh", headers={"Authorization": f"Bearer {first}"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["expires_in"] == 3600
+    assert body["token_type"] == "bearer"
+
+    # The refreshed token must actually authenticate.
+    r = client.get("/api/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"})
+    assert r.status_code == 200
+    assert r.json()["email"] == _REFRESH_USER["email"]
+
+
+def test_refresh_rotates_the_token(client):
+    """Each refresh mints a new jti, so the token string changes."""
+    first = _refresh_user_token(client)
+
+    again = client.post("/api/auth/refresh",
+                        headers={"Authorization": f"Bearer {first}"}).json()["access_token"]
+    assert again != first
+
+    # Stateless JWTs stay valid until they expire; revocation is a separate
+    # concern (the jti is already in the payload for exactly that).
+    assert client.get("/api/auth/me",
+                      headers={"Authorization": f"Bearer {first}"}).status_code == 200
+
+
+def test_refresh_without_token_rejected(client):
+    assert client.post("/api/auth/refresh").status_code == 401
+
+
+def test_refresh_with_garbage_token_rejected(client):
+    r = client.post("/api/auth/refresh", headers={"Authorization": "Bearer not.a.real.jwt"})
+    assert r.status_code == 401
+
+
+def test_refresh_rejected_for_deactivated_account(client):
+    """A deactivated account cannot keep refreshing its way back in."""
+    token = _refresh_user_token(client)
+    assert client.post("/api/auth/refresh",
+                       headers={"Authorization": f"Bearer {token}"}).status_code == 200
+
+    # Deactivate directly in the DB — there is deliberately no admin endpoint
+    # for this, so the test exercises the same guard get_current_user applies.
+    from app.database import SessionLocal
+    from app.models import User
+
+    db = SessionLocal()
+    try:
+        row = db.query(User).filter(User.email == _REFRESH_USER["email"]).first()
+        assert row is not None
+        row.is_active = False
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.post("/api/auth/refresh", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
+    # And the old token no longer works for anything else either.
+    assert client.get("/api/auth/me",
+                      headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+
 # ------------------------------------------------------------------ analysis
 def test_analyze_scam_text(client, user_headers):
     r = client.post("/api/analyze/text", json={"text": SCAM_MSG, "source": "sms"},

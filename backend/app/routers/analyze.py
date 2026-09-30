@@ -3,6 +3,7 @@
 Every request: JWT-authenticated, rate-limited, input-validated, audited.
 """
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
@@ -29,15 +30,15 @@ def _client_ip(request: Request) -> str:
 
 
 def _analyze(request: Request, user: User, input_type: str, text: str,
-             source: str, db: Session) -> Analysis:
+             source: str, db: Session, sender: Optional[str] = None) -> Analysis:
     analysis = analyze_content(
         user_id=user.id, input_type=input_type, text=text,
-        source=source, db=db, client_ip=_client_ip(request),
+        source=source, db=db, client_ip=_client_ip(request), sender=sender,
     )
     audit(db, "ANALYZE", user_id=user.id, resource=f"analysis:{analysis.id}",
           ip=_client_ip(request), user_agent=request.headers.get("user-agent"),
           meta={"input_type": input_type, "risk_level": analysis.risk_level,
-                "risk_score": analysis.risk_score})
+                "risk_score": analysis.risk_score, "has_sender": bool(sender)})
     return analysis
 
 
@@ -45,7 +46,8 @@ def _analyze(request: Request, user: User, input_type: str, text: str,
 def analyze_text(payload: AnalyzeTextIn, request: Request,
                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     text = validate_text_payload(payload.text)
-    analysis = _analyze(request, user, "text", text, payload.source, db)
+    analysis = _analyze(request, user, "text", text, payload.source, db,
+                        sender=payload.sender)
     return _detail(db, analysis.id)
 
 

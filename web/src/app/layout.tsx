@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { AuthProvider } from "@/lib/auth";
+import Providers from './providers';
 
 export const metadata: Metadata = {
   title: {
@@ -34,7 +34,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
       <body className="flex min-h-full flex-col bg-background text-foreground">
-        <AuthProvider>{children}</AuthProvider>
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

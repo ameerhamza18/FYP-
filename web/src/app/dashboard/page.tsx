@@ -9,17 +9,21 @@
  * roster. Authorization is enforced server-side (require_admin); this page only
  * reflects what the API returned.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 
 import Footer from '@/components/Footer';
 import Navbar from '@/components/Navbar';
 import ThreatFeed from '@/components/dashboard/ThreatFeed';
 import TrendChart from '@/components/dashboard/TrendChart';
+import TechniqueBars from '@/components/dashboard/TechniqueBars';
+import ThreatCloud from '@/components/dashboard/ThreatCloud';
 import { BTN, CARD, EmptyState, Metric, RiskBadge } from '@/components/ui';
 import { api, ApiError } from '@/lib/api';
 import { RequireAuth } from '@/lib/auth';
 import { formatDateTime, formatNumber, relativeTime } from '@/lib/presentation';
-import type { AdminStats, AdminUser, AuditLog, Campaign } from '@/lib/types';
+import type { AdminStats, AdminUser, AuditLog, Campaign, Analysis } from '@/lib/types';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 /* -------------------------------------------------------------- sub-views */
 
@@ -82,43 +86,6 @@ function StatsPanel({ stats }: { stats: AdminStats }) {
         </ul>
       </section>
     </>
-  );
-}
-
-function TechniqueBars({ stats }: { stats: AdminStats }) {
-  const techniques = stats.top_techniques ?? [];
-  const peak = Math.max(...techniques.map((t) => t.count), 1);
-
-  return (
-    <section className={`${CARD} p-5`}>
-      <h2 className="text-sm font-bold uppercase tracking-wider text-muted">
-        Most-abused techniques
-      </h2>
-      {techniques.length === 0 ? (
-        <p className="mt-4 text-sm text-muted">
-          No social-engineering techniques recorded yet.
-        </p>
-      ) : (
-        <ul className="mt-4 space-y-3">
-          {techniques.map((item) => (
-            <li key={item.technique} className="flex items-center gap-3">
-              <span className="w-28 shrink-0 truncate text-xs text-muted" title={item.technique}>
-                {item.technique}
-              </span>
-              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-muted">
-                <span
-                  className="block h-full rounded-full bg-brand"
-                  style={{ width: `${Math.max(4, (item.count / peak) * 100)}%` }}
-                />
-              </span>
-              <span className="w-8 shrink-0 text-right text-xs font-semibold tabular-nums text-muted">
-                {item.count}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
 
@@ -294,41 +261,69 @@ function UserRoster({ users }: { users: AdminUser[] }) {
 /* ------------------------------------------------------------------- page */
 
 function SocDashboard() {
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  const queryClient = useQueryClient();
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
+    queryKey: ['admin', 'stats'],
+    queryFn: () => api.admin.stats(),
+  });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const { data: campaigns, isLoading: campaignsLoading } = useQuery({
+    queryKey: ['admin', 'campaigns'],
+    queryFn: () => api.admin.campaigns(),
+  });
+
+  const { data: logs, isLoading: logsLoading } = useQuery({
+    queryKey: ['admin', 'audit-logs'],
+    queryFn: () => api.admin.auditLogs(60),
+  });
+
+  const { data: users, isLoading: usersLoading } = useQuery({
+    queryKey: ['admin', 'users'],
+    queryFn: () => api.admin.users(),
+  });
+
+  const { data: analysesData } = useQuery({
+    queryKey: ['admin', 'analyses'],
+    queryFn: () => api.admin.analyses({ limit: 100 }),
+  });
+
+  const analyses = (analysesData as any)?.data || [];
+
+  const handleRefresh = async () => {
     try {
-      // Independent reads: one slow section must not blank the whole page.
-      const [nextStats, nextCampaigns, nextLogs, nextUsers] = await Promise.all([
-        api.admin.stats(),
-        api.admin.campaigns(),
-        api.admin.auditLogs(60),
-        api.admin.users(),
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'campaigns'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'audit-logs'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'analyses'] }),
       ]);
-      setStats(nextStats);
-      setCampaigns(nextCampaigns);
-      setLogs(nextLogs);
-      setUsers(nextUsers);
-      setRefreshedAt(new Date().toISOString());
+      toast.success('Dashboard refreshed');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load the SOC dashboard.');
-    } finally {
-      setLoading(false);
+      toast.error('Failed to refresh dashboard');
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const handleExportAudit = async () => {
+    try {
+      await api.admin.exportAuditLogsCsv();
+      toast.success('Audit logs exported');
+    } catch (err) {
+      toast.error('Failed to export audit logs');
+    }
+  };
+
+  const handleExportThreats = async () => {
+    try {
+      await api.admin.exportAnalysesCsv();
+      toast.success('Threat feed exported');
+    } catch (err) {
+      toast.error('Failed to export threat feed');
+    }
+  };
+
+  const loading = statsLoading || campaignsLoading || logsLoading || usersLoading;
 
   return (
     <div className="mx-auto w-full max-w-7xl px-5 py-10 lg:px-6 lg:py-12">
@@ -341,12 +336,9 @@ function SocDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {refreshedAt && (
-            <span className="text-xs text-muted">Updated {relativeTime(refreshedAt)}</span>
-          )}
           <button
             type="button"
-            onClick={() => api.admin.exportAuditLogsCsv()}
+            onClick={handleExportAudit}
             className={BTN.secondary}
             title="Download audit trail as CSV"
           >
@@ -354,24 +346,29 @@ function SocDashboard() {
           </button>
           <button
             type="button"
-            onClick={() => api.admin.exportAnalysesCsv()}
+            onClick={handleExportThreats}
             className={BTN.secondary}
             title="Download full threat feed as CSV"
           >
             ↓ Threat CSV
           </button>
-          <button type="button" onClick={load} disabled={loading} className={BTN.secondary}>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={loading}
+            className={BTN.secondary}
+          >
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
       </header>
 
-      {error && (
+      {statsError && (
         <div
           role="alert"
           className="mb-6 rounded-xl border border-risk-critical/30 bg-risk-critical/10 px-4 py-3 text-sm text-risk-critical"
         >
-          {error}
+          Could not load dashboard statistics.
         </div>
       )}
 
@@ -396,7 +393,7 @@ function SocDashboard() {
         <div className="space-y-6">
           <StatsPanel stats={stats} />
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <section className={`${CARD} p-5`}>
               <h2 className="text-sm font-bold uppercase tracking-wider text-muted">
                 14-day risk trend
@@ -408,12 +405,23 @@ function SocDashboard() {
             <TechniqueBars stats={stats} />
           </div>
 
-          <ThreatFeed />
-          <CampaignTable campaigns={campaigns} />
+          <div className="grid gap-6 lg:grid-cols-3">
+            <section className={`${CARD} p-5 lg:col-span-2 h-[500px]`}>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-muted mb-4">
+                Live Threat Cloud
+              </h2>
+              <ThreatCloud analyses={analyses} />
+            </section>
+            <div className="space-y-6">
+               <ThreatFeed />
+            </div>
+          </div>
+
+          <CampaignTable campaigns={campaigns ?? []} />
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <AuditTrail logs={logs} />
-            <UserRoster users={users} />
+            <AuditTrail logs={logs ?? []} />
+            <UserRoster users={users ?? []} />
           </div>
         </div>
       )}

@@ -31,6 +31,9 @@ class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     role: str
+    # Seconds until `access_token` expires. Clients use this to refresh a live
+    # session before the user is cut off mid-analysis, instead of guessing.
+    expires_in: int
 
 
 class UserOut(BaseModel):
@@ -49,11 +52,22 @@ def _sanitize_text(v: str) -> str:
 class AnalyzeTextIn(BaseModel):
     text: str = Field(min_length=1, max_length=10000)
     source: str = Field(default="unknown", max_length=32)  # sms | whatsapp | email | other
+    # Originating address observed by the mobile interceptor (MSISDN, short code
+    # or alphanumeric sender ID). Optional: manual pastes have no sender.
+    sender: Optional[str] = Field(default=None, max_length=64)
 
     @field_validator("text")
     @classmethod
     def clean(cls, v: str) -> str:
         return _sanitize_text(v)
+
+    @field_validator("sender")
+    @classmethod
+    def clean_sender(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        cleaned = _sanitize_text(v).strip()
+        return cleaned or None
 
 
 class AnalyzeUrlIn(BaseModel):

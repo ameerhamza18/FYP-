@@ -1,12 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/analysis_result.dart';
+import '../services/analysis_queue.dart';
 import '../services/api_client.dart';
-import '../services/token_store.dart';
+import '../services/protection_service.dart';
 import '../main.dart';
+import '../widgets/protection_card.dart';
 import 'login_screen.dart';
 import 'result_screen.dart';
 
@@ -17,24 +20,209 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _api = TrustApiClient();
   final _picker = ImagePicker();
   List<AnalysisResult> _recent = [];
   bool _busy = false;
 
+  /// Real protection state, straight from Android. Starts as "unknown" so the UI
+  /// never claims protection it has not verified.
+  ProtectionStatus _protection = ProtectionStatus.unknown;
+  bool _protectionBusy = false;
+  StreamSubscription<ProtectionStatus>? _protectionSub;
+
+  /// Non-null when the history fetch failed. Without this the screen showed
+  /// "No threats detected yet" after a network failure, which told users the
+  /// opposite of the truth.
+  String? _historyError;
+  bool _historyLoading = true;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadHistory();
+    _initProtection();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _protectionSub?.cancel();
+    super.dispose();
+  }
+
+  /// Permissions are granted in system settings, so coming back to the app is the
+  /// only reliable moment to re-check whether anything changed.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshProtection();
+      _flushOfflineQueue();
+    }
   }
 
   Future<void> _loadHistory() async {
+    if (mounted) setState(() { _historyLoading = true; _historyError = null; });
     try {
       final h = await _api.history(limit: 10);
-      if (mounted) setState(() => _recent = h);
-    } catch (_) {/* offline — ignore */}
+      if (!mounted) return;
+      setState(() => _recent = h);
+    } on SessionExpiredException {
+      // The global handler in main.dart signs the user out; nothing to show.
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _historyError = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _historyError = 'Could not load your recent threats.');
+    } finally {
+      if (mounted) setState(() => _historyLoading = false);
+    }
   }
+  /// Connects to Android's interception layer: installs the handler that receives
+  /// intercepted messages, subscribes to live protection status, and replays
+  /// anything that arrived while the app was closed.
+  Future<void> _initProtection() async {
+    await ProtectionService.initialize(onIntercepted: _handleInterception);
+
+    _protectionSub = ProtectionService.statusStream.listen((status) {
+      if (mounted) setState(() => _protection = status);
+    });
+
+    await _refreshProtection();
+
+    // Cold-start handshake: text shared into the app or a tapped warning.
+    final initial = await ProtectionService.takeInitialInterception();
+    if (initial != null) _handleInterception(initial);
+
+    // Messages intercepted while the app was closed or offline.
+    await _replayPendingInterceptions();
+    await _flushOfflineQueue();
+  }
+
+  Future<void> _refreshProtection() async {
+    final status = await ProtectionService.status();
+    if (mounted) setState(() => _protection = status);
+  }
+
+  Future<void> _replayPendingInterceptions() async {
+    final pending = await ProtectionService.drainPendingInterceptions();
+    if (pending.isEmpty) return;
+    if (mounted) {
+      _snack('${pending.length} message(s) were checked while the app was closed.');
+    }
+    for (final message in pending) {
+      // Silent: these were already intercepted and the user has been told; the
+      // results land in Recent Threats instead of stacking result screens.
+      _handleInterception(message, showResult: false);
+    }
+  }
+
+  /// Uploads analyses that failed earlier because the phone was offline.
+  ///
+  /// Every early exit path re-queues both the untried part of the batch and the
+  /// items that were beyond it — the queue is cleared up-front, so anything not
+  /// explicitly put back would be silently lost.
+  static const int _maxFlushPerResume = 5;
+
+  Future<void> _flushOfflineQueue() async {
+    final queued = await AnalysisQueue.all();
+    if (queued.isEmpty) return;
+
+    final batch = queued.take(_maxFlushPerResume).toList();
+    final tail = queued.sublist(batch.length);
+    await AnalysisQueue.clear();
+
+    final failed = <QueuedAnalysis>[];
+    var checked = 0;
+    var stopped = false;
+    var offline = false;
+
+    for (final item in batch) {
+      if (stopped) break;
+      try {
+        await _api.analyzeText(item.text, source: item.source, sender: item.sender);
+        checked++;
+      } on SessionExpiredException {
+        // main.dart is already taking the user back to sign-in; keep the rest.
+        failed.addAll(batch.sublist(checked));
+        stopped = true;
+      } on NetworkException {
+        failed.addAll(batch.sublist(checked));
+        stopped = true;
+        offline = true;
+      } catch (_) {
+        // Permanently invalid item (e.g. rejected by validation): drop it rather
+        // than retry it forever and block the queue.
+      }
+    }
+
+    await _requeue([...failed, ...tail]);
+
+    if (offline) {
+      _snack('Still offline — saved checks will run when you are back online.');
+    } else if (checked > 0) {
+      _snack('Checked $checked message(s) saved while you were offline.');
+      await _loadHistory();
+    }
+  }
+
+  Future<void> _requeue(List<QueuedAnalysis> items) async {
+    for (final item in items) {
+      await AnalysisQueue.add(text: item.text, source: item.source, sender: item.sender);
+    }
+  }
+
+  void _handleInterception(InterceptedMessage message, {bool showResult = true}) {
+    if (!mounted) return;
+    _snack('⚡ Intercepted a ${_sourceLabel(message.source)} message — checking with TrustLayer…');
+    _run(
+      () => _api.analyzeText(message.text, source: message.source, sender: message.sender),
+      showResult: showResult,
+      queueOnOffline: message,
+    );
+  }
+
+  String _sourceLabel(String source) {
+    switch (source) {
+      case 'whatsapp': return 'WhatsApp';
+      case 'telegram': return 'Telegram';
+      case 'instagram': return 'Instagram';
+      case 'facebook': return 'Facebook';
+      case 'share': return 'shared';
+      case 'notification-tap': return 'flagged';
+      case 'notification': return 'chat';
+      default: return 'SMS';
+    }
+  }
+
+  // --------------------------------------------------------- protection setup
+  Future<void> _enableSmsProtection() async {
+    setState(() => _protectionBusy = true);
+    await ProtectionService.requestSmsPermission();
+    await _refreshProtection();
+    if (mounted) setState(() => _protectionBusy = false);
+  }
+
+  Future<void> _enableNotificationAccess() async {
+    if (!_protection.notificationAccess) {
+      _snack('Turn on notification access for TrustLayer in the list that opens.');
+    }
+    await ProtectionService.openNotificationListenerSettings();
+  }
+
+  Future<void> _enableNotifications() async {
+    setState(() => _protectionBusy = true);
+    await ProtectionService.requestNotificationPermission();
+    await _refreshProtection();
+    if (mounted) setState(() => _protectionBusy = false);
+  }
+
+  Future<void> _setQuietMode(bool enabled) async {
+    await ProtectionService.setQuietMode(enabled);
+    await _refreshProtection();
+  }
+
 
   Future<void> _analyzeText() async {
     final controller = TextEditingController();
@@ -109,28 +297,53 @@ class _HomeScreenState extends State<HomeScreen> {
     await _run(() => _api.analyzeUrl(url.trim()));
   }
 
-  Future<void> _run(Future<AnalysisResult> Function() job) async {
+  Future<void> _run(
+    Future<AnalysisResult> Function() job, {
+    bool showResult = true,
+    InterceptedMessage? queueOnOffline,
+  }) async {
     setState(() => _busy = true);
     try {
       final result = await job();
       if (!mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ResultScreen(result: result),
-      ));
+      if (showResult) {
+        await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ResultScreen(result: result),
+        ));
+      }
       await _loadHistory();
+    } on SessionExpiredException {
+      // The global handler in main.dart returns the user to the login screen.
+    } on NetworkException catch (e) {
+      // An interception is a one-time event: if the upload fails the user would
+      // simply never be warned, so it is queued and retried automatically.
+      if (queueOnOffline != null) {
+        await AnalysisQueue.add(
+          text: queueOnOffline.text,
+          source: queueOnOffline.source,
+          sender: queueOnOffline.sender,
+        );
+        _snack('You are offline — the message is saved and will be checked automatically.');
+      } else {
+        _snack(e.message);
+      }
     } on ApiException catch (e) {
       _snack(e.statusCode == 503
           ? 'OCR unavailable on the server — paste the text instead'
           : e.message);
     } catch (_) {
-      _snack('Cannot reach TrustLayer server');
+      _snack('Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  void _snack(String msg) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _snack(String msg) {
+    // Every call site sits after an `await`, so the widget may already be
+    // detached (user navigated away) — using context here would throw.
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
 
   Color _levelColor(String level) {
     switch (level) {
@@ -229,31 +442,18 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                // Protection Status Card
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: TrustLayerColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: TrustLayerColors.primary.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.verified_user, color: TrustLayerColors.low, size: 40),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Protection Active',
-                              style: GoogleFonts.inter(color: TrustLayerColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
-                            Text('Real-time interception enabled',
-                              style: GoogleFonts.inter(color: TrustLayerColors.textSecondary, fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                // Real, OS-verified protection state (permissions, notification
+                // access, quiet mode) — replaces the old always-green badge.
+                ProtectionCard(
+                  status: _protection,
+                  busy: _protectionBusy,
+                  onEnableSms: _enableSmsProtection,
+                  onEnableNotificationAccess: _enableNotificationAccess,
+                  onEnableNotifications: _enableNotifications,
+                  onQuietModeChanged: _setQuietMode,
+                  onTestAlert: () => ProtectionService.showTestAlert(),
+                  onOpenBatterySettings: () =>
+                      ProtectionService.openBatteryOptimizationSettings(),
                 ),
                 const SizedBox(height: 32),
                 Text('Quick Analysis',
@@ -285,15 +485,46 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (_recent.isEmpty)
+                if (_historyLoading && _recent.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: CircularProgressIndicator(color: TrustLayerColors.primary),
+                    ),
+                  )
+                else if (_recent.isEmpty && _historyError != null)
                   Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 40),
                       child: Column(
                         children: [
-                          Icon(Icons.shield_outlined, size: 48, color: TrustLayerColors.textSecondary.withOpacity(0.3)),
+                          Icon(Icons.cloud_off, size: 48,
+                              color: TrustLayerColors.high.withOpacity(0.7)),
                           const SizedBox(height: 8),
-                          Text('No threats detected yet', style: TextStyle(color: TrustLayerColors.textSecondary)),
+                          Text(_historyError!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: TrustLayerColors.high, fontSize: 14)),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _loadHistory,
+                            child: Text('Retry',
+                                style: TextStyle(color: TrustLayerColors.primary)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (_recent.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Column(
+                        children: [
+                          Icon(Icons.shield_outlined, size: 48,
+                              color: TrustLayerColors.textSecondary.withOpacity(0.3)),
+                          const SizedBox(height: 8),
+                          Text('No threats detected yet',
+                              style: TextStyle(color: TrustLayerColors.textSecondary)),
                         ],
                       ),
                     ),

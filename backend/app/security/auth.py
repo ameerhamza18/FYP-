@@ -50,6 +50,11 @@ def create_access_token(user: User) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
 
+def access_token_ttl_seconds() -> int:
+    """Lifetime of a freshly issued access token, in seconds."""
+    return settings.access_token_expire_minutes * 60
+
+
 def decode_token(token: str) -> Optional[dict]:
     try:
         return jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])

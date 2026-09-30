@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mirrors TrustLayerColors in lib/main.dart so the launch window matches
+         the first Flutter frame instead of flashing white. -->
+    <color name="tl_background">#0F172A</color>
+    <color name="tl_surface">#1E293B</color>
+    <color name="tl_primary">#3B82F6</color>
+</resources>

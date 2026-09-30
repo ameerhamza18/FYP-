@@ -41,8 +41,7 @@ export class ApiError extends Error {
 }
 
 export function readStoredToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  return null; // Deprecated: Tokens are now managed via httpOnly cookies
 }
 
 export function readStoredUser(): User | null {
@@ -57,8 +56,7 @@ export function readStoredUser(): User | null {
 }
 
 export function storeToken(token: string): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(TOKEN_KEY, token);
+  // Deprecated: Tokens are now managed via httpOnly cookies
 }
 
 export function storeUser(user: User): void {
@@ -68,8 +66,8 @@ export function storeUser(user: User): void {
 
 export function clearSession(): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
+  // Cookies are cleared by the backend on /auth/logout
 }
 
 function notifyUnauthorized(): void {
@@ -121,10 +119,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
   const headers = new Headers({ Accept: 'application/json' });
 
-  if (!anonymous) {
-    const token = readStoredToken();
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-  }
+  // Tokens are now handled via httpOnly cookies; manual Authorization header is removed.
 
   let payload: BodyInit | undefined;
   if (formData) {
@@ -143,6 +138,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       body: payload,
       signal,
       cache: 'no-store',
+      credentials: 'include', // Ensure cookies are sent with every request
     });
   } catch {
     throw new ApiError(

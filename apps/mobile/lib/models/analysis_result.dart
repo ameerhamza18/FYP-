@@ -27,6 +27,7 @@ class SETechnique {
 class AnalysisResult {
   final int? id;
   final String inputType, riskLevel, threatType, recommendation, explanation;
+  final String explanationSource;
   final int riskScore;
   final double? mlScore, ruleScore, intelScore, urlScore, latencyMs;
   final bool campaignFlagged;
@@ -41,6 +42,7 @@ class AnalysisResult {
     required this.threatType,
     required this.recommendation,
     required this.explanation,
+    this.explanationSource = 'rules',
     this.mlScore,
     this.ruleScore,
     this.intelScore,
@@ -59,6 +61,7 @@ class AnalysisResult {
         threatType: (j['threat_type'] ?? '') as String,
         recommendation: (j['recommendation'] ?? '') as String,
         explanation: (j['explanation'] ?? '') as String,
+        explanationSource: (j['explanation_source'] ?? 'rules') as String,
         mlScore: (j['ml_score'] as num?)?.toDouble(),
         ruleScore: (j['rule_score'] as num?)?.toDouble(),
         intelScore: (j['intel_score'] as num?)?.toDouble(),

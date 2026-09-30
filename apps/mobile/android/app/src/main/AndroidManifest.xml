@@ -1,17 +1,33 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.trustlayer.app">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permissions required for AI Scam & Fraud Interception -->
+    <!-- =====================================================================
+         Permissions for automatic, on-device scam interception.
+
+         Deliberately minimal: READ_SMS is NOT requested. TrustLayer only needs
+         to observe messages as they arrive (RECEIVE_SMS); it never reads the
+         user's message history. Google Play restricts SMS permissions, and an
+         unnecessary permission is both a policy risk and a privacy risk.
+         ===================================================================== -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Only needed to read a screenshot the user explicitly picks, on API <= 32. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Interception: incoming SMS (runtime-granted) + threat alerts (API 33+). -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+
 
     <application
         android:label="TrustLayer"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:supportsRtl="true">
 
         <activity
             android:name=".MainActivity"
@@ -27,10 +43,51 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- One-tap Share Target: allows users to share any suspicious text/URL from WhatsApp/Browser/SMS -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
         </activity>
         
+        <!-- Applied once the process is running; LaunchTheme only covers the
+             cold-start window while the Flutter engine warms up. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.NormalTheme"
+            android:resource="@style/NormalTheme" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- SMS Broadcast Receiver: warns before the user opens a scam text.
+             (Only a default SMS app may discard a message, so this alerts and
+             never deletes — see apps/mobile/PROTECTION.md.) -->
+        <receiver
+            android:name=".SmsInterceptor"
+            android:permission="android.permission.BROADCAST_SMS"
+            android:exported="true">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Reads notifications posted by monitored chat/SMS apps (WhatsApp,
+             Telegram, Instagram, Messenger, Viber, SMS apps...) so scam chats
+             are analysed even when no SMS is involved. The user grants this in
+             system settings; the binding permission ensures only the OS can bind
+             to it. Monitored packages are listed in NotificationInterceptorService. -->
+        <service
+            android:name=".NotificationInterceptorService"
+            android:exported="true"
+            android:label="TrustLayer Scam Protection"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+
     </application>
 </manifest>

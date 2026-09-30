@@ -3,13 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/api_client.dart';
-import '../services/token_store.dart';
 import '../main.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  final bool hasToken;
-  const LoginScreen({super.key, this.hasToken = false});
+  /// True when we arrived here because the backend rejected an expired token, so
+  /// the user is told why instead of being silently dropped on a login form.
+  final bool sessionExpired;
+  const LoginScreen({super.key, this.sessionExpired = false});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -20,13 +21,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _busy = false;
+  bool _obscure = true;
   String? _error;
   bool _isRegister = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.hasToken) _goHome();
+    // Routing for a stored token is decided by SplashScreen._route, which also
+    // verifies the token is still accepted before entering the app.
+    if (widget.sessionExpired) {
+      _error = 'Your session expired. Please sign in again.';
+    }
   }
 
   Future<void> _goHome() async {
@@ -37,18 +43,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
     setState(() { _busy = true; _error = null; });
     try {
+      // The client trims/validates these, so pass them through untouched.
       if (_isRegister) {
-        await _api.register(_email.text.trim(), _password.text);
+        await _api.register(_email.text, _password.text);
       } else {
-        await _api.login(_email.text.trim(), _password.text);
+        await _api.login(_email.text, _password.text);
       }
       await _goHome();
+    } on NetworkException catch (e) {
+      if (mounted) setState(() => _error = e.message);
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = 'Cannot reach TrustLayer server. Check ApiConfig.baseUrl.');
+      if (mounted) setState(() => _error = 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -101,13 +111,21 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               TextField(
                 controller: _password,
-                obscureText: true,
+                obscureText: _obscure,
                 style: TextStyle(color: TrustLayerColors.textPrimary),
                 inputFormatters: [FilteringTextInputFormatter.singleLineFormatter],
                 decoration: InputDecoration(
                   labelText: 'Password',
                   labelStyle: TextStyle(color: TrustLayerColors.textSecondary),
                   prefixIcon: Icon(Icons.lock_outline, color: TrustLayerColors.textSecondary),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: TrustLayerColors.textSecondary,
+                    ),
+                    tooltip: _obscure ? 'Show password' : 'Hide password',
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
                   filled: true,
                   fillColor: TrustLayerColors.surface,
                   border: OutlineInputBorder(
@@ -122,10 +140,28 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 24),
               if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(_error!,
-                      style: TextStyle(color: TrustLayerColors.critical, fontSize: 14)),
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: TrustLayerColors.critical.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: TrustLayerColors.critical.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          color: TrustLayerColors.critical, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(_error!,
+                            style: const TextStyle(
+                                color: TrustLayerColors.critical, fontSize: 13)),
+                      ),
+                    ],
+                  ),
                 ),
               SizedBox(
                 width: double.infinity,

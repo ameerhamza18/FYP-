@@ -1,4 +1,5 @@
 import RiskGauge from '@/components/RiskGauge';
+import RiskVortex from '@/components/analysis/RiskVortex';
 import { CARD, Chip, RiskBadge } from '@/components/ui';
 import { riskTone, TONE_BG, TONE_TEXT } from '@/lib/presentation';
 import type { AnalysisDetail } from '@/lib/types';
@@ -44,7 +45,9 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
       {/* Verdict */}
       <section className={`${CARD} overflow-hidden`}>
         <div className="flex flex-col items-center gap-8 p-6 sm:flex-row sm:p-8">
-          <RiskGauge score={analysis.risk_score} level={analysis.risk_level} size={158} />
+          <div className="h-[240px] w-[240px] shrink-0">
+            <RiskVortex score={analysis.risk_score} />
+          </div>
 
           <div className="flex-1 text-center sm:text-left">
             <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">

@@ -1,19 +1,15 @@
 'use client';
 
-/**
- * Sign in / create account. This route was previously linked from the navbar
- * but did not exist (404).
- *
- * The `?next=` parameter is validated to a same-origin relative path so it can
- * never be used as an open redirect.
- */
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { FormEvent } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { BTN, INPUT, Logo } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { toast } from 'sonner';
 
 type Mode = 'signin' | 'register';
 
@@ -24,81 +20,76 @@ function safeNext(value: string | null): string {
   return value;
 }
 
-function passwordProblem(password: string): string | null {
-  if (password.length < 8) return 'Password must be at least 8 characters.';
-  if (!/[A-Z]/.test(password)) return 'Password must contain an uppercase letter.';
-  if (!/[a-z]/.test(password)) return 'Password must contain a lowercase letter.';
-  if (!/\d/.test(password)) return 'Password must contain a digit.';
-  return null;
-}
+// Validation schemas
+const loginSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+const registerSchema = loginSchema.extend({
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Must contain an uppercase letter')
+    .regex(/[a-z]/, 'Must contain a lowercase letter')
+    .regex(/\d/, 'Must contain a digit'),
+  confirm: z.string(),
+}).refine((data) => data.password === data.confirm, {
+  message: 'Passwords do not match',
+  path: ['confirm'],
+});
+
+type LoginValues = z.infer<typeof loginSchema>;
+type RegisterValues = z.infer<typeof registerSchema>;
 
 export default function LoginPage() {
   const { user, ready, login, register } = useAuth();
   const router = useRouter();
 
   const [mode, setMode] = useState<Mode>('signin');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [next, setNext] = useState('/analyze');
 
-  // Read ?next= from the URL without useSearchParams (keeps the page static).
+  // Form setup
+  const methods = useForm<RegisterValues>({
+    resolver: mode === 'register' ? zodResolver(registerSchema) : zodResolver(loginSchema as any),
+    defaultValues: {
+      email: '',
+      password: '',
+      confirm: '',
+    },
+  });
+
+  const {
+    register: registerField,
+    handleSubmit,
+    setValue,
+    reset,
+    formState: { errors, isSubmitting },
+  } = methods;
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setNext(safeNext(params.get('next')));
   }, []);
 
-  // Already signed in? Bounce straight to the destination.
   useEffect(() => {
     if (ready && user) router.replace(next);
   }, [ready, user, router, next]);
 
   const switchMode = useCallback((nextMode: Mode) => {
     setMode(nextMode);
-    setError(null);
-    setPassword('');
-    setConfirm('');
-  }, []);
+    reset({ email: '', password: '', confirm: '' });
+  }, [reset]);
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    setError(null);
-
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setError('Enter your email address.');
-      return;
-    }
-
-    if (mode === 'register') {
-      const problem = passwordProblem(password);
-      if (problem) {
-        setError(problem);
-        return;
-      }
-      if (password !== confirm) {
-        setError('Passwords do not match.');
-        return;
-      }
-    } else if (!password) {
-      setError('Enter your password.');
-      return;
-    }
-
-    setBusy(true);
+  const onSubmit = async (data: any) => {
     try {
       if (mode === 'register') {
-        await register(trimmedEmail, password);
+        await register(data.email, data.password);
       } else {
-        await login(trimmedEmail, password);
+        await login(data.email, data.password);
       }
       router.replace(next);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Try again.');
-    } finally {
-      setBusy(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Something went wrong. Try again.');
     }
   };
 
@@ -106,7 +97,6 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      {/* Brand panel — always dark, for the dark/white contrast. */}
       <aside className="relative hidden overflow-hidden border-ink-border bg-ink lg:flex lg:w-[46%] lg:flex-col lg:justify-between lg:border-r lg:p-12">
         <div className="tl-grid-bg pointer-events-none absolute inset-0 opacity-30" aria-hidden />
         <div
@@ -200,42 +190,35 @@ export default function LoginPage() {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-foreground">
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4" noValidate>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="email" className="text-sm font-medium text-foreground">
                 Email address
               </label>
               <input
+                {...registerField('email')}
                 id="email"
-                name="email"
                 type="email"
                 autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                className={INPUT}
+                className={`${INPUT} ${errors.email ? 'border-risk-critical' : ''}`}
               />
+              {errors.email && <p className="text-xs text-risk-critical">{errors.email.message}</p>}
             </div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="mb-1.5 block text-sm font-medium text-foreground"
-              >
+            <div className="flex flex-col gap-1">
+              <label htmlFor="password" className="text-sm font-medium text-foreground">
                 Password
               </label>
               <input
+                {...registerField('password')}
                 id="password"
-                name="password"
                 type="password"
                 autoComplete={isRegister ? 'new-password' : 'current-password'}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 placeholder={isRegister ? 'At least 8 characters' : '••••••••'}
-                className={INPUT}
+                className={`${INPUT} ${errors.password ? 'border-risk-critical' : ''}`}
               />
+              {errors.password && <p className="text-xs text-risk-critical">{errors.password.message}</p>}
               {isRegister && (
                 <p className="mt-1.5 text-xs text-muted">
                   8+ characters with an uppercase letter, a lowercase letter and a digit.
@@ -244,38 +227,28 @@ export default function LoginPage() {
             </div>
 
             {isRegister && (
-              <div>
-                <label
-                  htmlFor="confirm"
-                  className="mb-1.5 block text-sm font-medium text-foreground"
-                >
+              <div className="flex flex-col gap-1">
+                <label htmlFor="confirm" className="text-sm font-medium text-foreground">
                   Confirm password
                 </label>
                 <input
+                  {...registerField('confirm')}
                   id="confirm"
-                  name="confirm"
                   type="password"
                   autoComplete="new-password"
-                  required
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
                   placeholder="Repeat your password"
-                  className={INPUT}
+                  className={`${INPUT} ${errors.confirm ? 'border-risk-critical' : ''}`}
                 />
+                {errors.confirm && <p className="text-xs text-risk-critical">{errors.confirm.message}</p>}
               </div>
             )}
 
-            {error && (
-              <div
-                role="alert"
-                className="rounded-xl border border-risk-critical/30 bg-risk-critical/10 px-4 py-3 text-sm text-risk-critical"
-              >
-                {error}
-              </div>
-            )}
-
-            <button type="submit" disabled={busy} className={`${BTN.primary} w-full py-3`}>
-              {busy
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={`${BTN.primary} w-full py-3`}
+            >
+              {isSubmitting
                 ? isRegister
                   ? 'Creating account…'
                   : 'Signing in…'

@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TrustLayer â€” Security Center</title>
+<title>TrustLayer — Security Operations Center</title>
 <style>
   :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;
         --red:#f85149;--orange:#d29922;--green:#3fb950;--blue:#58a6ff;}
@@ -43,8 +43,8 @@
 
 <!-- ============ LOGIN ============ -->
 <div id="loginView" class="login-card">
-  <h1>ðŸ›¡ TrustLayer</h1>
-  <p class="sub">Security Center â€” admin sign-in</p>
+  <h1>🛡️ TrustLayer</h1>
+  <p class="sub">Security Operations Center — Administrator Sign-in</p>
   <input id="email" type="email" placeholder="Admin email" value="admin@trustlayer.com">
   <input id="password" type="password" placeholder="Password">
   <button onclick="login()">Sign in</button>
@@ -55,7 +55,7 @@
 <div id="dashView" class="hidden">
   <header class="top">
     <div>
-      <h1>ðŸ›¡ TRUSTLAYER SECURITY CENTER</h1>
+      <h1>🛡️ TRUSTLAYER SECURITY CENTER</h1>
       <p class="sub">SOC-style threat monitoring &amp; campaign detection</p>
     </div>
     <button onclick="logout()">Sign out</button>
@@ -75,7 +75,7 @@
   </div>
 
   <div class="panel" style="margin-top:14px">
-    <h2>ðŸš¨ Coordinated Campaigns</h2>
+    <h2>🛰️ Coordinated Campaigns</h2>
     <table id="campTable"><thead><tr><th>Severity</th><th>Reports</th><th>Users</th><th>First seen</th><th>Sample</th></tr></thead><tbody></tbody></table>
   </div>
 </div>
@@ -83,5 +83,3 @@
 <script src="/static/dashboard.js"></script>
 </body>
 </html>
-
-

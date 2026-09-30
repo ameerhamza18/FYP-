@@ -22,7 +22,8 @@ from app.security.llm_guard import detect_prompt_injection
 from services.llm.explainer import generate_explanation
 from services.nlp import preprocessing, se_techniques
 from services.nlp.classifier import get_classifier
-from services.threat_engine import campaign_detector, rule_engine, risk_scoring, threat_intel
+from services.threat_engine import (campaign_detector, risk_scoring, rule_engine,
+                                    sender_intel, threat_intel)
 from services.url_intelligence.analyzer import analyze_url
 
 logger = logging.getLogger("trustlayer.engine")
@@ -70,7 +71,8 @@ def _run_url_channel(text: str) -> Tuple[Optional[float], List[Dict], List[str]]
 
 
 def _collect_indicators(rule_result: Dict, intel_result: Dict, url_indicators: List[Dict],
-                        ml_prob: Optional[float], injection: Dict) -> List[Dict]:
+                        ml_prob: Optional[float], injection: Dict,
+                        sender_result: Optional[Dict] = None) -> List[Dict]:
     """Merge all evidence channels into one indicator list."""
     indicators: List[Dict] = []
     for hit in rule_result["hits"]:
@@ -83,6 +85,9 @@ def _collect_indicators(rule_result: Dict, intel_result: Dict, url_indicators: L
             "category": "Threat Intel", "severity": "HIGH",
             "title": f"Threat-intel match: {m['value']}", "detail": m["description"],
         })
+    # Sender identity evidence (who sent it) sits alongside content evidence.
+    if sender_result:
+        indicators += sender_result["indicators"]
     indicators += url_indicators
     if injection["injection_detected"]:
         indicators.append({
@@ -146,7 +151,8 @@ def _persist_campaign(db: Session, analysis: Analysis, campaign_signature: Optio
 
 
 def analyze_content(user_id: int, input_type: str, text: str, source: str,
-                    db: Session, client_ip: Optional[str] = None) -> Analysis:
+                    db: Session, client_ip: Optional[str] = None,
+                    sender: Optional[str] = None) -> Analysis:
     """Execute the full Trust Engine pipeline and persist the result."""
     started = time.perf_counter()
 
@@ -167,8 +173,13 @@ def analyze_content(user_id: int, input_type: str, text: str, source: str,
     # ---------- 5. Deterministic rule engine ----------
     rule_result = rule_engine.run_rules(text)
 
-    # ---------- 6. Threat intelligence ----------
+    # ---------- 6. Threat intelligence (content + sender identity) ----------
     intel_result = threat_intel.check_text(text)
+    # Who sent it is intel too: a known-bad/spoofed sender is an IOC, so the two
+    # sub-channels combine by taking the strongest evidence (never the sum, which
+    # would let weak signals masquerade as one strong one).
+    sender_result = sender_intel.check_sender(sender)
+    intel_score = max(intel_result["score"], sender_result["score"])
 
     # ---------- 7. Prompt-injection security scan ----------
     injection = detect_prompt_injection(text)
@@ -180,12 +191,13 @@ def analyze_content(user_id: int, input_type: str, text: str, source: str,
     verdict = risk_scoring.fuse_scores(
         ml_prob=ml_prob,
         rule_score=fused_rule_score,
-        intel_score=intel_result["score"],
+        intel_score=intel_score,
         url_score=url_score,
         rule_result=rule_result,
     )
 
-    indicators = _collect_indicators(rule_result, intel_result, url_indicators, ml_prob, injection)
+    indicators = _collect_indicators(rule_result, intel_result, url_indicators,
+                                     ml_prob, injection, sender_result)
 
     # ---------- 9. Explainable AI ----------
     explanation, explanation_source = generate_explanation(verdict, indicators, se_findings, snippet)
@@ -202,7 +214,7 @@ def analyze_content(user_id: int, input_type: str, text: str, source: str,
         threat_type=verdict["threat_type"],
         ml_score=ml_prob,
         rule_score=round(fused_rule_score, 2),
-        intel_score=round(intel_result["score"], 2),
+        intel_score=round(intel_score, 2),
         url_score=url_score,
         recommendation=verdict["recommendation"],
         explanation=explanation,
@@ -213,6 +225,13 @@ def analyze_content(user_id: int, input_type: str, text: str, source: str,
             "se_score": round(se_score, 2),
             "rules": {"hits": rule_result["hits"], "evaluated": rule_result["rules_evaluated"]},
             "intel_matches": intel_result["matches"],
+            "sender_intel": {
+                # Masked: a full MSISDN is personal data we do not need to keep.
+                "sender_masked": sender_result["sender_masked"],
+                "score": sender_result["score"],
+                "level": sender_result["level"],
+                "matches": sender_result["matches"],
+            },
             "entities": entities,
             "prompt_injection": injection,
             "source": source,

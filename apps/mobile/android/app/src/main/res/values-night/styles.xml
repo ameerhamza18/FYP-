@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Night-qualified variants. The app is dark in both OS modes, so these simply
+     mirror res/values/styles.xml to guarantee no light window flash when the
+     device is in light mode. -->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:statusBarColor">@color/tl_background</item>
+        <item name="android:navigationBarColor">@color/tl_background</item>
+    </style>
+
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/tl_background</item>
+        <item name="android:statusBarColor">@color/tl_background</item>
+        <item name="android:navigationBarColor">@color/tl_background</item>
+    </style>
+</resources>

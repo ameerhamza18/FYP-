@@ -1,9 +1,19 @@
-"""Database engine, session factory and base model for TrustLayer.
+"""Database engine, session factory, base model and schema bootstrap.
 
-Development uses SQLite by default; production should point DATABASE_URL at
-PostgreSQL. Sensitive columns (user contact data, analysis payload snippets)
-are encrypted at rest by the application layer before persistence.
+Development uses SQLite by default; production must point DATABASE_URL at
+PostgreSQL. Encryption at rest for persisted message content is performed by the
+application before rows are written — see ``app.security.crypto`` and the column
+mappings in ``app.models``.
+
+Schema management
+-----------------
+Production applies the Alembic migration chain (``alembic upgrade head``), which
+is versioned, reviewable and reversible. ``Base.metadata.create_all()`` remains
+a development/test convenience only: it cannot express an ``ALTER``, so a model
+change would silently be ignored on an existing database.
 """
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -35,8 +45,39 @@ def get_db():
         db.close()
 
 
+def alembic_config():
+    """Build an Alembic config pointing at this deployment's database."""
+    from alembic.config import Config as AlembicConfig
+
+    alembic_dir = Path(__file__).resolve().parents[1] / "alembic"
+    cfg = AlembicConfig()
+    cfg.set_main_option("script_location", str(alembic_dir))
+    cfg.set_main_option("version_locations", str(alembic_dir / "versions"))
+    # configparser treats '%' as interpolation, so a URL-encoded password must
+    # be escaped before it is handed to Alembic.
+    cfg.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+    return cfg
+
+
+def run_migrations() -> None:
+    """Apply every pending migration (``alembic upgrade head``).
+
+    Called on startup when ``APP_ENV=production``. A failure here is fatal on
+    purpose: serving traffic against a schema the code does not expect is worse
+    than not starting.
+    """
+    from alembic import command
+
+    command.upgrade(alembic_config(), "head")
+
+
 def init_db() -> None:
-    """Create all tables (dev bootstrap; use Alembic migrations in production)."""
+    """Prepare the schema: migrate in production, create in development."""
+    if settings.is_production:
+        run_migrations()
+        return
+
     from app import models  # noqa: F401  (register mappers)
 
     Base.metadata.create_all(bind=engine)
+

@@ -14,11 +14,18 @@ All `/api/*` routes require `Authorization: Bearer <jwt>` except register/login.
 ## Analysis
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| POST | `/api/analyze/text` | `{text, source}` | full risk report |
+| POST | `/api/analyze/text` | `{text, source, sender?}` | full risk report |
 | POST | `/api/analyze/url` | `{url}` | full risk report incl. `url_score` |
 | POST | `/api/analyze/screenshot` | multipart `upload` (PNG/JPEG) | OCR → full risk report |
 | GET | `/api/analyze/history?limit=20` | — | user's recent threats |
 | GET | `/api/analyze/{id}` | — | one report (owner/admin only — BOLA enforced) |
+
+`sender` (optional, max 64 chars) is the originating address observed by the
+mobile interception layer — an MSISDN, a bulk short code, or an alphanumeric
+sender ID. Supplying it adds a **Sender Reputation** channel (spoofed brand
+sender IDs, Unicode/homograph IDs, foreign and premium-rate ranges, known-bad
+senders). It is folded into the threat-intel channel as the strongest of the two
+signals, and only the **masked** form (`+4477*****123`) is ever persisted.
 
 ### Risk report shape
 ```json
@@ -33,13 +40,15 @@ All `/api/*` routes require `Authorization: Bearer <jwt>` except register/login.
   "campaign_flagged": false,
   "latency_ms": 8.4,
   "indicators": [
-    {"category": "URL", "severity": "HIGH", "title": "Suspicious TLD .xyz", "detail": "..."}
+    {"category": "URL", "severity": "HIGH", "title": "Suspicious TLD .xyz", "detail": "..."},
+    {"category": "Sender Reputation", "severity": "HIGH", "title": "Sender ID impersonates HBL: HBL-ALERTS", "detail": "..."}
   ],
   "se_techniques": [
     {"technique": "Authority", "intensity": "HIGH", "evidence": "i am from your bank"}
   ]
 }
 ```
+
 Risk levels: `LOW` (<30) · `MEDIUM` (30-59) · `HIGH` (60-84) · `CRITICAL` (85+)
 
 ## Admin (SOC Security Center, role=admin)

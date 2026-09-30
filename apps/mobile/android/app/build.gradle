@@ -79,3 +79,10 @@ android {
 flutter {
     source '../..'
 }
+
+dependencies {
+    // NotificationCompat + ActivityCompat (runtime permission requests). The
+    // Flutter embedding already pulls androidx.core transitively, but pinning it
+    // keeps the interception code building if the embedding ever drops it.
+    implementation("androidx.core:core-ktx:1.12.0")
+}

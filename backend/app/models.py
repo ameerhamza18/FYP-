@@ -8,6 +8,17 @@ indicators       : per-analysis detected indicators with severity
 se_findings      : social-engineering technique findings per analysis
 campaigns        : coordinated attack campaign registry
 audit_logs       : immutable security audit trail
+
+Encryption at rest
+------------------
+Every column that can hold analysed message content (``analyses.content_snippet``,
+``analyses.explanation``, ``analyses.recommendation``, ``indicators.detail``,
+``se_findings.evidence``, ``campaigns.sample_snippet``) is an
+:class:`~app.security.crypto.EncryptedText` column: the value is Fernet-encrypted
+by the application before it reaches the database, so the stored form is
+ciphertext. Reads decrypt transparently. Columns that never hold message bodies
+(hashes, scores, labels, masked senders, audit metadata) stay plaintext so they
+remain queryable.
 """
 import datetime as dt
 
@@ -20,12 +31,12 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
-    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+from app.security.crypto import EncryptedText
 
 
 def _now() -> dt.datetime:
@@ -46,13 +57,21 @@ class User(Base):
 
 class Analysis(Base):
     __tablename__ = "analyses"
+    # A client-supplied idempotency key may repeat per user (NULLs are exempt),
+    # so a mobile retry after a dropped connection cannot create a second row.
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_request_id", name="uq_analysis_user_request"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     input_type = Column(String(32), nullable=False)  # text | url | screenshot
     content_hash = Column(String(64), nullable=False, index=True)
-    content_snippet = Column(Text, nullable=False)  # truncated, sanitized
+    # Encrypted at rest: truncated, sanitized message content.
+    content_snippet = Column(EncryptedText, nullable=False)
+    # Optional idempotency key from the client (POST retry safety).
+    client_request_id = Column(String(64), nullable=True, index=True)
 
     risk_score = Column(Integer, nullable=False)  # 0-100
     risk_level = Column(String(16), nullable=False)  # LOW | MEDIUM | HIGH | CRITICAL
@@ -63,8 +82,8 @@ class Analysis(Base):
     intel_score = Column(Float, nullable=True)
     url_score = Column(Float, nullable=True)
 
-    recommendation = Column(Text, nullable=False)
-    explanation = Column(Text, nullable=False)
+    recommendation = Column(EncryptedText, nullable=False)
+    explanation = Column(EncryptedText, nullable=False)
     explanation_source = Column(String(16), nullable=False, default="template")  # template | llm
 
     engine_breakdown = Column(JSON, nullable=True)
@@ -90,7 +109,7 @@ class Indicator(Base):
     category = Column(String(64), nullable=False)   # e.g. URL, SocialEngineering, Credential
     severity = Column(String(16), nullable=False)   # INFO | LOW | MEDIUM | HIGH | CRITICAL
     title = Column(String(255), nullable=False)
-    detail = Column(Text, nullable=True)
+    detail = Column(EncryptedText, nullable=True)   # may quote the message
 
     analysis = relationship("Analysis", back_populates="indicators")
 
@@ -105,7 +124,7 @@ class SEFinding(Base):
 
     technique = Column(String(64), nullable=False)  # Authority, Urgency, Fear, ...
     intensity = Column(String(16), nullable=False)  # LOW | MEDIUM | HIGH
-    evidence = Column(Text, nullable=True)
+    evidence = Column(EncryptedText, nullable=True)  # the quoted trigger phrase
 
     analysis = relationship("Analysis", back_populates="se_techniques")
 
@@ -122,7 +141,7 @@ class Campaign(Base):
     hits = Column(Integer, nullable=False, default=1)
     distinct_users = Column(Integer, nullable=False, default=1)
     severity = Column(String(16), nullable=False, default="MEDIUM")
-    sample_snippet = Column(Text, nullable=True)
+    sample_snippet = Column(EncryptedText, nullable=True)  # encrypted like analyses
 
     first_seen = Column(DateTime(timezone=True), nullable=False, default=_now)
     last_seen = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)

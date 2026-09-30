@@ -1,16 +1,21 @@
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Line,
+} from 'recharts';
 import { formatDate } from '@/lib/presentation';
 import type { ThreatTrendPoint } from '@/lib/types';
 
 /**
- * 14-day risk trend. Drawn with a fixed viewBox so the aspect ratio is stable
- * at any container width.
+ * 14-day risk trend.
+ * Upgraded to Recharts for interactivity and professional visualization.
  */
 export default function TrendChart({ data }: { data: ThreatTrendPoint[] }) {
-  const W = 640;
-  const H = 190;
-  const PAD_X = 28;
-  const PAD_Y = 26;
-
   if (!data || data.length === 0) {
     return (
       <p className="py-12 text-center text-sm text-muted">
@@ -20,24 +25,10 @@ export default function TrendChart({ data }: { data: ThreatTrendPoint[] }) {
   }
 
   const max = Math.max(...data.map((d) => d.total), 1);
-  const span = Math.max(data.length - 1, 1);
-  const stepX = (W - PAD_X * 2) / span;
-
-  const x = (index: number) => PAD_X + index * stepX;
-  const y = (value: number) => H - PAD_Y - (value / max) * (H - PAD_Y * 2);
-
-  const toPath = (selector: (point: ThreatTrendPoint) => number) =>
-    data
-      .map((point, index) => `${index === 0 ? 'M' : 'L'}${x(index).toFixed(1)},${y(selector(point)).toFixed(1)}`)
-      .join(' ');
-
-  const totalPath = toPath((d) => d.total);
-  const highPath = toPath((d) => d.high);
-  const areaPath = `${totalPath} L${x(data.length - 1).toFixed(1)},${H - PAD_Y} L${x(0).toFixed(1)},${H - PAD_Y} Z`;
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted">
+    <div className="h-[220px] w-full">
+      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted">
         <span className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-brand" aria-hidden />
           All analyses
@@ -49,72 +40,64 @@ export default function TrendChart({ data }: { data: ThreatTrendPoint[] }) {
         <span className="ml-auto tabular-nums">Peak {max}/day</span>
       </div>
 
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="mt-3 w-full"
-        role="img"
-        aria-label={`Threat trend over ${data.length} days, peak ${max} per day`}
-      >
-        <defs>
-          <linearGradient id="tl-trend-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="var(--brand)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
-        {[0, 0.5, 1].map((fraction) => {
-          const gridY = PAD_Y + fraction * (H - PAD_Y * 2);
-          return (
-            <line
-              key={fraction}
-              x1={PAD_X}
-              x2={W - PAD_X}
-              y1={gridY}
-              y2={gridY}
-              stroke="var(--border)"
-              strokeWidth="1"
-              strokeDasharray="4 6"
-            />
-          );
-        })}
-
-        <path d={areaPath} fill="url(#tl-trend-fill)" />
-        <path
-          d={totalPath}
-          fill="none"
-          stroke="var(--brand)"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d={highPath}
-          fill="none"
-          stroke="var(--risk-high)"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray="5 4"
-        />
-
-        {data.map((point, index) => (
-          <circle
-            key={point.date}
-            cx={x(index)}
-            cy={y(point.total)}
-            r="3"
-            fill="var(--surface)"
-            stroke="var(--brand)"
-            strokeWidth="2"
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart
+          data={data}
+          margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+        >
+          <defs>
+            <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--brand)" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="var(--brand)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid
+            strokeDasharray="3 3"
+            vertical={false}
+            stroke="var(--border)"
+            opacity={0.5}
           />
-        ))}
-      </svg>
-
-      <div className="mt-2 flex justify-between text-[11px] text-muted">
-        <span>{formatDate(data[0].date)}</span>
-        {data.length > 2 && <span>{formatDate(data[Math.floor(data.length / 2)].date)}</span>}
-        <span>{formatDate(data[data.length - 1].date)}</span>
-      </div>
+          <XAxis
+            dataKey="date"
+            tickFormatter={(val) => formatDate(val)}
+            tick={{ fontSize: 11, fill: 'var(--muted)' }}
+            axisLine={false}
+            tickLine={false}
+            minTickGap={30}
+          />
+          <YAxis
+            tick={{ fontSize: 11, fill: 'var(--muted)' }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: 'var(--surface)',
+              borderColor: 'var(--border)',
+              borderRadius: '12px',
+              fontSize: '12px',
+              color: 'var(--foreground)',
+            }}
+            itemStyle={{ color: 'var(--foreground)' }}
+          />
+          <Area
+            type="monotone"
+            dataKey="total"
+            stroke="var(--brand)"
+            strokeWidth={2}
+            fillOpacity={1}
+            fill="url(#colorTotal)"
+          />
+          <Line
+            type="monotone"
+            dataKey="high"
+            stroke="var(--risk-high)"
+            strokeWidth={2}
+            strokeDasharray="5 5"
+            dot={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 }

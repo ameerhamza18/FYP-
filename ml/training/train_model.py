@@ -42,11 +42,11 @@ def load_dataset():
 def build_pipeline() -> Pipeline:
     features = FeatureUnion([
         ("word", TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True,
-                                 min_df=2, max_features=20000)),
+                                 min_df=2, max_features=35000)),
         ("char", TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5),
-                                 sublinear_tf=True, min_df=2, max_features=30000)),
+                                 sublinear_tf=True, min_df=3, max_features=45000)),
     ])
-    clf = LogisticRegression(C=4.0, max_iter=1000, class_weight="balanced")
+    clf = LogisticRegression(C=3.0, max_iter=1000, class_weight="balanced")
     return Pipeline([("features", features), ("clf", clf)])
 
 
