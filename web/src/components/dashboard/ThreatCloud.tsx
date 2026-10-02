@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Float, Sphere, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import type { Analysis } from '@/lib/types';
+import type { Analysis, AdminAnalysis } from '@/lib/types';
 
 interface ThreatPointProps {
   position: [number, number, number];
@@ -67,7 +67,7 @@ function CampaignConnections({ points, campaigns }: { points: any[], campaigns: 
   );
 }
 
-export default function ThreatCloud({ analyses }: { analyses: Analysis[] }) {
+export default function ThreatCloud({ analyses }: { analyses: (Analysis | AdminAnalysis)[] }) {
   const points = useMemo(() => {
     return analyses.map((a, i) => {
       const x = (a.risk_score / 100) * 10 - 5;

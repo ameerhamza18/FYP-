@@ -16,8 +16,10 @@ from app.security.audit import audit
 from app.security.auth import (
     access_token_ttl_seconds,
     create_access_token,
+    decode_token,
     get_current_user,
     hash_password,
+    revoke_token,
     verify_password,
 )
 
@@ -86,6 +88,19 @@ def refresh(request: Request, user: User = Depends(get_current_user), db: Sessio
     )
 
 
+@router.post("/logout", status_code=status.HTTP_200_OK)
+def logout(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ")[1]
+        payload = decode_token(token)
+        if payload and "jti" in payload:
+            revoke_token(payload["jti"])
+    audit(db, "LOGOUT", user_id=user.id, resource=user.email,
+          ip=request.client.host if request.client else None)
+    return {"status": "success", "message": "Successfully logged out"}
+
+
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
@@ -96,9 +111,16 @@ def delete_me(request: Request, user: User = Depends(get_current_user), db: Sess
     """Delete current user account and data (Google Play Policy requirement)."""
     user_id = user.id
     email = user.email
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ")[1]
+        payload = decode_token(token)
+        if payload and "jti" in payload:
+            revoke_token(payload["jti"])
+
     audit(db, "ACCOUNT_DELETED", user_id=user_id, resource=email,
           ip=request.client.host if request.client else None)
-    
+
     # Clean up user's analyses and findings
     from app.models import Analysis
     db.query(Analysis).filter(Analysis.user_id == user_id).delete()

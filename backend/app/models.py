@@ -29,6 +29,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -61,6 +62,9 @@ class Analysis(Base):
     # so a mobile retry after a dropped connection cannot create a second row.
     __table_args__ = (
         UniqueConstraint("user_id", "client_request_id", name="uq_analysis_user_request"),
+        Index("ix_analyses_user_created", "user_id", "created_at"),
+        Index("ix_analyses_risk_created", "risk_level", "created_at"),
+        Index("ix_analyses_campaign_user", "campaign_signature", "user_id"),
     )
 
     id = Column(Integer, primary_key=True, index=True)

@@ -7,10 +7,9 @@ FROM node:20-alpine AS base
 # libc6-compat is required by the Next.js SWC binaries on Alpine/musl.
 RUN apk add --no-cache libc6-compat
 
-# Use a regional npm mirror (significantly faster on Asian/PK networks) and
-# tolerate a lossy link while 'npm ci' downloads ~500 tarballs; on a fast
-# EU/US connection the default registry resolves and this is unnecessary.
-ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
+# Optional registry build arg (defaults to official npmjs registry)
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+ENV NPM_CONFIG_REGISTRY=$NPM_REGISTRY \
     NPM_CONFIG_FETCH_RETRIES=5 \
     NPM_CONFIG_FETCH_TIMEOUT=600000
 

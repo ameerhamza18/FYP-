@@ -1,12 +1,15 @@
 """Admin SOC-style Security Center API (role-restricted, OWASP API5)."""
+import asyncio
 import datetime as dt
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import Analysis, Campaign, SEFinding, User
 from app.schemas import AdminAnalysisOut, AdminAnalysisPage, AdminStatsOut, CampaignOut
 from app.security.auth import require_admin
@@ -157,15 +160,67 @@ def users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     ]
 
 
+@router.get("/stream/threats")
+async def stream_threats(_: User = Depends(require_admin)):
+    """Server-Sent Events (SSE) live feed of incoming threats for the SOC dashboard."""
+    async def event_generator():
+        last_checked = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=10)
+        while True:
+            db = SessionLocal()
+            try:
+                new_threats = (
+                    db.query(Analysis, User.email)
+                    .join(User, Analysis.user_id == User.id)
+                    .filter(Analysis.created_at > last_checked)
+                    .order_by(Analysis.created_at.asc())
+                    .limit(20)
+                    .all()
+                )
+                if new_threats:
+                    last_checked = new_threats[-1][0].created_at
+                    events_data = [
+                        {
+                            "id": a.id,
+                            "user_email": email,
+                            "input_type": a.input_type,
+                            "risk_score": a.risk_score,
+                            "risk_level": a.risk_level,
+                            "threat_type": a.threat_type,
+                            "campaign_flagged": a.campaign_flagged,
+                            "created_at": a.created_at.isoformat() if a.created_at else None,
+                        }
+                        for a, email in new_threats
+                    ]
+                    yield f"event: threat\ndata: {json.dumps(events_data)}\n\n"
+                else:
+                    yield ": ping\n\n"
+            except Exception:
+                pass
+            finally:
+                db.close()
+            await asyncio.sleep(3)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.get("/export/audit-logs/csv")
-def export_audit_logs_csv(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def export_audit_logs_csv(limit: int = 5000, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Export audit logs as CSV file for SOC compliance."""
     import csv
     import io
     from fastapi.responses import Response
     from app.models import AuditLog
 
-    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).all()
+    limit = max(1, min(limit, 20000))
+    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["id", "user_id", "action", "resource", "ip", "user_agent", "created_at"])
@@ -180,16 +235,18 @@ def export_audit_logs_csv(db: Session = Depends(get_db), _: User = Depends(requi
 
 
 @router.get("/export/analyses/csv")
-def export_analyses_csv(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def export_analyses_csv(limit: int = 5000, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Export threat analyses feed as CSV file for security reporting."""
     import csv
     import io
     from fastapi.responses import Response
 
+    limit = max(1, min(limit, 20000))
     rows = (
         db.query(Analysis, User.email)
         .join(User, Analysis.user_id == User.id)
         .order_by(Analysis.created_at.desc())
+        .limit(limit)
         .all()
     )
     output = io.StringIO()
@@ -203,4 +260,11 @@ def export_analyses_csv(db: Session = Depends(get_db), _: User = Depends(require
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=trustlayer_threat_analyses.csv"},
     )
+
+
+@router.post("/maintenance/purge-retention")
+def trigger_retention_purge(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Manually trigger data retention expiration purge (admin-only)."""
+    from app.services.retention import purge_expired_records
+    return purge_expired_records(db)
 

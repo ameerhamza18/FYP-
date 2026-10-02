@@ -46,13 +46,31 @@ def get_limiter() -> SlidingWindowRateLimiter:
     return _limiter_singleton
 
 
+import ipaddress
+
+TRUSTED_PROXIES = {
+    ipaddress.ip_network("127.0.0.1/32"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+}
+
+
+def _is_trusted_proxy(ip_str: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        return any(ip in net for net in TRUSTED_PROXIES)
+    except ValueError:
+        return False
+
+
 def client_ip(request) -> str:
+    direct_ip = request.client.host if request.client else "unknown"
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
+    if forwarded and _is_trusted_proxy(direct_ip):
         return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "unknown"
+    return direct_ip
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

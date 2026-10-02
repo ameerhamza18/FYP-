@@ -9,10 +9,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: trustlayer
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me-in-production}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in infrastructure/docker/.env}
       POSTGRES_DB: trustlayer
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U trustlayer"]
       interval: 5s
@@ -27,8 +29,9 @@ services:
     environment:
       APP_ENV: production
       DEBUG: "false"
-      DATABASE_URL: postgresql://trustlayer:${DB_PASSWORD:-change-me-in-production}@db:5432/trustlayer
+      DATABASE_URL: postgresql://trustlayer:${DB_PASSWORD:?set DB_PASSWORD in infrastructure/docker/.env}@db:5432/trustlayer
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in infrastructure/docker/.env}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in infrastructure/docker/.env}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@trustlayer.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in infrastructure/docker/.env}
@@ -36,6 +39,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - backend-net
+      - frontend-net
     ports:
       - "8001:8000"   # host 8001 → container 8000
     healthcheck:
@@ -56,6 +62,8 @@ services:
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001/api}
+    networks:
+      - frontend-net
     ports:
       - "3000:3000"
     depends_on:
@@ -67,6 +75,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+networks:
+  backend-net:
+    internal: true
+  frontend-net:
 
 volumes:
   pgdata:

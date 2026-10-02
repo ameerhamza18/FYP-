@@ -9,6 +9,7 @@ import '../services/analysis_queue.dart';
 import '../services/api_client.dart';
 import '../services/protection_service.dart';
 import '../main.dart';
+import '../widgets/defense_shield_3d.dart';
 import '../widgets/protection_card.dart';
 import 'login_screen.dart';
 import 'result_screen.dart';
@@ -442,6 +443,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                DefenseShield3D(
+                  isProtected: _protection.automaticSmsProtection,
+                ),
+                const SizedBox(height: 20),
                 // Real, OS-verified protection state (permissions, notification
                 // access, quiet mode) — replaces the old always-green badge.
                 ProtectionCard(
@@ -547,22 +552,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _toolCard(IconData icon, String label, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(22),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
         decoration: BoxDecoration(
-          color: TrustLayerColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: TrustLayerColors.textSecondary.withOpacity(0.1)),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF161E31),
+              Color(0xFF0F1523),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 32, color: TrustLayerColors.primary),
-            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: TrustLayerColors.primary.withOpacity(0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: TrustLayerColors.primary.withOpacity(0.25)),
+              ),
+              child: Icon(icon, size: 26, color: TrustLayerColors.primary),
+            ),
+            const SizedBox(height: 10),
             Text(label,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: TrustLayerColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+              style: GoogleFonts.inter(
+                color: TrustLayerColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                height: 1.25,
+              ),
+            ),
           ],
         ),
       ),

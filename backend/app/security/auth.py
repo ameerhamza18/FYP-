@@ -7,6 +7,8 @@ Implements:
 """
 import datetime as dt
 import secrets
+import threading
+import time
 from typing import Optional
 
 import bcrypt
@@ -55,9 +57,58 @@ def access_token_ttl_seconds() -> int:
     return settings.access_token_expire_minutes * 60
 
 
+_revoked_jtis: dict[str, float] = {}
+_revocation_lock = threading.Lock()
+
+
+def revoke_token(jti: str, ttl_seconds: int = 3600) -> None:
+    """Revoke a token JTI until its natural expiry (JTI blocklist)."""
+    if not jti:
+        return
+    expiry = time.time() + ttl_seconds
+    with _revocation_lock:
+        _revoked_jtis[jti] = expiry
+        now = time.time()
+        expired = [k for k, exp in _revoked_jtis.items() if exp < now]
+        for k in expired:
+            del _revoked_jtis[k]
+
+    if settings.redis_url:
+        try:
+            import redis
+            r = redis.Redis.from_url(settings.redis_url)
+            r.setex(f"revoked:jti:{jti}", ttl_seconds, "1")
+        except Exception:
+            pass
+
+
+def is_token_revoked(jti: str) -> bool:
+    if not jti:
+        return False
+    with _revocation_lock:
+        if jti in _revoked_jtis:
+            if time.time() < _revoked_jtis[jti]:
+                return True
+            del _revoked_jtis[jti]
+
+    if settings.redis_url:
+        try:
+            import redis
+            r = redis.Redis.from_url(settings.redis_url)
+            if r.exists(f"revoked:jti:{jti}"):
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def decode_token(token: str) -> Optional[dict]:
     try:
-        return jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+        jti = payload.get("jti")
+        if jti and is_token_revoked(jti):
+            return None
+        return payload
     except jwt.ExpiredSignatureError:
         return None
     except jwt.InvalidTokenError:

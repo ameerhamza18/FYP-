@@ -107,3 +107,32 @@ def generate_explanation(verdict: Dict, indicators: List[Dict],
     except Exception as exc:  # noqa: BLE001 — degrade gracefully, never fail the analysis
         logger.warning("LLM explanation failed (%s) — using template fallback", exc)
         return template_explanation(verdict, indicators, se_findings, snippet), "template"
+
+
+async def async_generate_explanation(verdict: Dict, indicators: List[Dict],
+                                     se_findings: List[Dict], snippet: str) -> tuple:
+    """Async variant using httpx.AsyncClient to avoid blocking the event loop."""
+    if not settings.openai_api_key:
+        return template_explanation(verdict, indicators, se_findings, snippet), "template"
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.llm_timeout_seconds) as client:
+            resp = await client.post(
+                f"{settings.openai_base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                json={
+                    "model": settings.openai_model,
+                    "temperature": 0.2,
+                    "max_tokens": 400,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": build_user_prompt(verdict, indicators, se_findings, snippet)},
+                    ],
+                },
+            )
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+            return validate_llm_output(content), "llm"
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Async LLM explanation failed (%s) — using template fallback", exc)
+        return template_explanation(verdict, indicators, se_findings, snippet), "template"

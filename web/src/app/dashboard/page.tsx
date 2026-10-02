@@ -288,7 +288,7 @@ function SocDashboard() {
     queryFn: () => api.admin.analyses({ limit: 100 }),
   });
 
-  const analyses = (analysesData as any)?.data || [];
+  const analyses = analysesData?.items || [];
 
   const handleRefresh = async () => {
     try {

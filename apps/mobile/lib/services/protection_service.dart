@@ -249,11 +249,10 @@ class ProtectionService {
       // Settings screens are unavailable on some OEM ROMs; never crash the UI.
     }
   }
-}
-
-
   static Future<void> openBatteryOptimizationSettings() =>
       _invoke('openBatteryOptimizationSettings');
 
   /// Posts a sample scam warning so the user can verify alerts really appear.
   static Future<void> showTestAlert() => _invoke('showTestAlert');
+}
+

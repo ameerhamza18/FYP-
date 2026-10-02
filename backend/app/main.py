@@ -51,20 +51,20 @@ app = FastAPI(
     title="TrustLayer API",
     description="AI-Powered Scam, Phishing & Social-Engineering Detection Platform",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
     lifespan=lifespan,
 )
 
-# --- CORS allow-list (never use '*' with credentials) ---
+# --- Middleware LIFO execution: RateLimitMiddleware first, then CORSMiddleware so CORS headers wrap 429s ---
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
-app.add_middleware(RateLimitMiddleware)
 
 
 @app.middleware("http")
@@ -75,6 +75,7 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    response.headers.setdefault("Content-Security-Policy", "default-src 'self'")
     if settings.is_production:
         response.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
@@ -107,8 +108,15 @@ def _bootstrap_admin() -> None:
 
 @app.get("/health", tags=["ops"])
 def health():
-    """Liveness probe: cheap, never touches the database."""
-    return {"status": "ok", "app": settings.app_name, "environment": settings.app_env}
+    """Liveness probe: reports app state and ML model availability."""
+    from services.nlp.classifier import get_classifier
+    classifier = get_classifier()
+    return {
+        "status": "ok",
+        "app": settings.app_name,
+        "ml_model": "loaded" if classifier.available else "rules-only",
+        "environment": settings.app_env,
+    }
 
 
 @app.get("/ready", tags=["ops"])

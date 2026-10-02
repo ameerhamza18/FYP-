@@ -9,30 +9,35 @@ terraform {
 }
 
 variable "region" { default = "us-east-1" }
-variable "instance_type" { default = "t3.small" }
+variable "instance_type" { default = "t3.medium" } # 4GB RAM suitable for ML inference & OCR
 variable "key_name" { type = string }
+variable "admin_ssh_cidr" {
+  description = "CIDR block permitted for administrative SSH access"
+  type        = string
+  default     = "0.0.0.0/0" # In production, restrict to your organization/VPN IP
+}
 
 provider "aws" { region = var.region }
 
 resource "aws_security_group" "trustlayer" {
   name_prefix = "trustlayer-"
   ingress {
-    from_port = 443
-    to_port   = 443
-    protocol  = "tcp"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
-    from_port = 80
-    to_port   = 80
-    protocol  = "tcp"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # restrict to your IP in real deployments
+    cidr_blocks = [var.admin_ssh_cidr]
   }
   egress {
     from_port   = 0
@@ -57,8 +62,16 @@ resource "aws_instance" "trustlayer" {
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.trustlayer.id]
 
+  root_block_device {
+    volume_size           = 30
+    volume_type           = "gp3"
+    encrypted             = true
+    delete_on_termination = true
+  }
+
   user_data = <<-EOF
     #!/bin/bash
+    set -euo pipefail
     apt-get update
     apt-get install -y docker.io docker-compose-v2 certbot nginx
     systemctl enable --now docker

@@ -111,7 +111,7 @@ def _collect_indicators(rule_result: Dict, intel_result: Dict, url_indicators: L
 
 
 def _persist_campaign(db: Session, analysis: Analysis, campaign_signature: Optional[str],
-                      verdict: Dict) -> None:
+                      verdict: Dict, raw_snippet: str) -> None:
     """Correlate this analysis against known campaign signatures."""
     if not campaign_signature:
         return
@@ -119,12 +119,13 @@ def _persist_campaign(db: Session, analysis: Analysis, campaign_signature: Optio
     if campaign is None:
         db.add(Campaign(
             signature=campaign_signature, hits=1, distinct_users=1,
-            sample_snippet=analysis.content_snippet[:300],
+            sample_snippet=raw_snippet[:300],
             severity=verdict["risk_level"],
         ))
         return
     campaign.hits += 1
-    if verdict["risk_score"] > {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}.get(campaign.severity, 0):
+    severity_ranks = {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
+    if severity_ranks.get(verdict["risk_level"], 0) > severity_ranks.get(campaign.severity, 0):
         campaign.severity = verdict["risk_level"]
     # distinct_users is incremented by the router when the report comes from a
     # different user than the previous reports of this campaign (tracked via a
@@ -252,7 +253,7 @@ def analyze_content(user_id: int, input_type: str, text: str, source: str,
     if campaign_signature:
         analysis.campaign_signature = campaign_signature
         db.flush()  # make the row visible to the distinct-user count query
-        _persist_campaign(db, analysis, campaign_signature, verdict)
+        _persist_campaign(db, analysis, campaign_signature, verdict, snippet)
 
     db.commit()
     logger.info("Analysis %d (%s) → %s %d/100 in %.1fms",

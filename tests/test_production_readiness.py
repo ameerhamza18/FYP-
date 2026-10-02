@@ -96,6 +96,7 @@ def _settings(**overrides) -> Settings:
         app_env="production",
         debug=False,
         secret_key="a" * 64,
+        field_encryption_key="k3Zf84pZ1L0v9X1Y2Z3A4B5C6D7E8F9G0H1I2J3K4L5=",
         database_url="postgresql://user:pw@db:5432/trustlayer",
         cors_origins=["http://localhost:3000"],
         rate_limit_enabled=True,

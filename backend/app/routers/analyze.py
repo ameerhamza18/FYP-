@@ -5,7 +5,7 @@ Every request: JWT-authenticated, rate-limited, input-validated, audited.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -30,7 +30,8 @@ def _client_ip(request: Request) -> str:
 
 
 def _analyze(request: Request, user: User, input_type: str, text: str,
-             source: str, db: Session, sender: Optional[str] = None) -> Analysis:
+             source: str, db: Session, sender: Optional[str] = None,
+             background_tasks: Optional[BackgroundTasks] = None) -> Analysis:
     analysis = analyze_content(
         user_id=user.id, input_type=input_type, text=text,
         source=source, db=db, client_ip=_client_ip(request), sender=sender,
@@ -44,23 +45,27 @@ def _analyze(request: Request, user: User, input_type: str, text: str,
 
 @router.post("/text", response_model=AnalysisDetailOut)
 def analyze_text(payload: AnalyzeTextIn, request: Request,
+                 background_tasks: BackgroundTasks,
                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     text = validate_text_payload(payload.text)
     analysis = _analyze(request, user, "text", text, payload.source, db,
-                        sender=payload.sender)
+                        background_tasks=background_tasks, sender=payload.sender)
     return _detail(db, analysis.id)
 
 
 @router.post("/url", response_model=AnalysisDetailOut)
 def analyze_url_endpoint(payload: AnalyzeUrlIn, request: Request,
+                         background_tasks: BackgroundTasks,
                          user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     text = validate_text_payload(payload.url)
-    analysis = _analyze(request, user, "url", text, "url", db)
+    analysis = _analyze(request, user, "url", text, "url", db,
+                        background_tasks=background_tasks)
     return _detail(db, analysis.id)
 
 
 @router.post("/screenshot", response_model=AnalysisDetailOut)
 async def analyze_screenshot(request: Request, upload: UploadFile,
+                             background_tasks: BackgroundTasks,
                              user: User = Depends(get_current_user),
                              db: Session = Depends(get_db)):
     """OCR a screenshot in memory (bytes never written to disk) and analyze."""
@@ -82,7 +87,8 @@ async def analyze_screenshot(request: Request, upload: UploadFile,
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No readable text found in the screenshot",
         )
-    analysis = _analyze(request, user, "screenshot", text, "screenshot", db)
+    analysis = _analyze(request, user, "screenshot", text, "screenshot", db,
+                        background_tasks=background_tasks)
     return _detail(db, analysis.id)
 
 

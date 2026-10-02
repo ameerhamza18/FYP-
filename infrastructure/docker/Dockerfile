@@ -2,15 +2,15 @@
 # TrustLayer API — production image
 FROM python:3.12-slim
 
-# Use regional mirrors (significantly faster on Asian/PK networks);
-# remove these two ENV/sed lines if building from a fast EU/US connection.
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ \
-    PIP_DEFAULT_TIMEOUT=120
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources || true
+# Optional mirror build args (e.g. --build-arg PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/)
+ARG PIP_INDEX_URL=""
+ENV PIP_INDEX_URL=$PIP_INDEX_URL \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PYTHONPATH=/srv/trustlayer:/srv/trustlayer/backend
 
 # Tesseract for the OCR (vision) service
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr tesseract-ocr-eng \
+    tesseract-ocr tesseract-ocr-eng curl \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -25,9 +25,10 @@ COPY backend backend
 COPY services services
 COPY ml ml
 
-# Train the ML model at build time so the image ships with scam_model.joblib
-# (dataset is generated synthetically — no external data dependency)
-RUN python -m ml.training.generate_dataset && python -m ml.training.train_model
+# Use existing model if present, or generate & train if missing
+RUN if [ ! -f ml/models/scam_model.joblib ]; then \
+        python -m ml.training.generate_dataset && python -m ml.training.train_model; \
+    fi
 
 ENV APP_ENV=production DEBUG=false
 WORKDIR /srv/trustlayer/backend

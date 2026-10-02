@@ -232,7 +232,7 @@ def assert_production_ready(settings: Settings) -> None:
     # Field-level encryption of persisted message content. Without an explicit
     # key the data would be encrypted with one derived from SECRET_KEY and a
     # key rotation would silently make every stored snippet unreadable.
-    if not _env("FIELD_ENCRYPTION_KEY"):
+    if not settings.field_encryption_key:
         problems.append(
             "FIELD_ENCRYPTION_KEY must be set (generate with: "
             "python -m app.scripts.generate_key). It protects stored message "
@@ -242,8 +242,8 @@ def assert_production_ready(settings: Settings) -> None:
         try:
             from app.security.crypto import validate_key_material
 
-            validate_key_material(_env("FIELD_ENCRYPTION_KEY"),
-                                  _env("FIELD_ENCRYPTION_KEY_OLD"))
+            validate_key_material(settings.field_encryption_key,
+                                  settings.field_encryption_key_old)
         except ValueError as exc:
             problems.append(f"FIELD_ENCRYPTION_KEY is unusable: {exc}")
 
