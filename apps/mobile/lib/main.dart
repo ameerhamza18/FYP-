@@ -7,15 +7,20 @@ import 'services/api_client.dart';
 import 'services/token_store.dart';
 
 class TrustLayerColors {
-  static const Color primary = Color(0xFF3B82F6); // Electric Blue
-  static const Color background = Color(0xFF0F172A); // Slate-900
-  static const Color surface = Color(0xFF1E293B); // Slate-800
-  static const Color textPrimary = Color(0xFFF8FAFC); // Slate-50
+  static const Color primary = Color(0xFF38BDF8); // Cyan-400
+  static const Color primaryDark = Color(0xFF0284C7); // Sky-600
+  static const Color accent = Color(0xFF3B82F6); // Electric Blue
+  static const Color background = Color(0xFF040711); // Deep Obsidian
+  static const Color surface = Color(0xFF0A1122); // Carbon Surface
+  static const Color surfaceElevated = Color(0xFF101C36); // Elevated Card
+  static const Color surfaceBorder = Color(0xFF1E2D4A); // Tactical Hairline Border
+  static const Color textPrimary = Color(0xFFF1F5F9); // Slate-100
   static const Color textSecondary = Color(0xFF94A3B8); // Slate-400
-  static const Color critical = Color(0xFFEF4444); // Red-500
-  static const Color high = Color(0xFFF59E0B); // Amber-500
-  static const Color medium = Color(0xFFEAB308); // Yellow-500
-  static const Color low = Color(0xFF10B981); // Emerald-500
+  static const Color textMuted = Color(0xFF64748B); // Slate-500
+  static const Color critical = Color(0xFFEF4444); // Crimson Alert
+  static const Color high = Color(0xFFF97316); // High Warning Orange
+  static const Color medium = Color(0xFFFBBF24); // Medium Caution Amber
+  static const Color low = Color(0xFF10B981); // Verified Emerald
 }
 
 void main() {
@@ -98,13 +103,25 @@ class _TrustLayerAppState extends State<TrustLayerApp> with WidgetsBindingObserv
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: TrustLayerColors.background,
-        colorScheme: ColorScheme.dark(
+        colorScheme: const ColorScheme.dark(
           primary: TrustLayerColors.primary,
           surface: TrustLayerColors.surface,
-          background: TrustLayerColors.background,
-          onPrimary: Colors.white,
+          onPrimary: Color(0xFF040711),
           onSurface: TrustLayerColors.textPrimary,
-          onBackground: TrustLayerColors.textPrimary,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: TrustLayerColors.background,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: false,
+        ),
+        cardTheme: CardTheme(
+          color: TrustLayerColors.surface,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: TrustLayerColors.surfaceBorder, width: 1),
+          ),
         ),
         textTheme: GoogleFonts.interTextTheme(
           ThemeData.dark().textTheme,
@@ -123,11 +140,23 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
     _route();
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   /// Cold-start routing. A stored token is *verified*, never trusted: an expired
@@ -165,20 +194,67 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: TrustLayerColors.background,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.shield, size: 72, color: TrustLayerColors.primary),
-            const SizedBox(height: 12),
-            Text('TrustLayer',
-                style: GoogleFonts.inter(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: TrustLayerColors.textPrimary
-                )),
-            Text('Stay Safe Online',
-                style: TextStyle(color: TrustLayerColors.textSecondary)),
+            AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                final scale = 1.0 + (_pulseController.value * 0.08);
+                final glowOpacity = 0.2 + (_pulseController.value * 0.25);
+                return Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: TrustLayerColors.surfaceElevated,
+                    border: Border.all(
+                      color: TrustLayerColors.primary.withOpacity(0.5),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: TrustLayerColors.primary.withOpacity(glowOpacity),
+                        blurRadius: 28,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Transform.scale(
+                      scale: scale,
+                      child: const Icon(
+                        Icons.shield_outlined,
+                        size: 44,
+                        color: TrustLayerColors.primary,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'TRUSTLAYER',
+              style: GoogleFonts.inter(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 3.0,
+                color: TrustLayerColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'AUTONOMOUS CYBER DEFENSE CORE',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 10,
+                letterSpacing: 2.0,
+                fontWeight: FontWeight.w600,
+                color: TrustLayerColors.primary.withOpacity(0.8),
+              ),
+            ),
           ],
         ),
       ),

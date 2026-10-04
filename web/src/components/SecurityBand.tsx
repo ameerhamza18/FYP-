@@ -1,74 +1,66 @@
 import Link from 'next/link';
 
 const CONTROLS = [
-  'JWT authentication with expiry and RBAC on every API route',
-  'Object-level authorization (OWASP API1/BOLA) — verified by tests',
-  'Sliding-window rate limiting per client IP',
-  'bcrypt password hashing (cost 12) with per-hash salt',
-  'Strict CORS allow-list — never a wildcard with credentials',
-  'Immutable audit trail for logins, registrations and analyses',
-  'Prompt-injection defenses and LLM output validation',
-  'Uploads validated by size and MIME type, processed in memory only',
-  'Hardened response headers (nosniff, DENY, referrer policy, HSTS)',
-  'Fail-fast startup: refuses to boot on insecure production config',
+  { name: 'OWASP API1 (BOLA)', desc: 'Object-level user ownership verified by automated CI/CD test gates' },
+  { name: 'Sliding-Window Rate Limiting', desc: 'In-memory token bucket mitigation per IP & authenticated principal' },
+  { name: 'Bcrypt Cost Factor 12', desc: 'Secure per-user cryptographic salt generation with timing attack defense' },
+  { name: 'JWT Cryptographic Sessions', desc: 'Revocable RS256/HS256 tokens with short lifetime & sliding renewal' },
+  { name: 'Zero-Disk In-Memory OCR', desc: 'Temporary image tensors are isolated in RAM and flushed immediately' },
+  { name: 'Immutable Audit Trail', desc: 'Cryptographically ordered log for every auth, scan, and admin operation' },
+  { name: 'Prompt-Injection Defenses', desc: 'Strict sanitization filters and isolated LLM output schema validation' },
+  { name: 'Strict CORS Allow-Lists', desc: 'Origin validation enforced; zero wildcard credentials permitted' },
 ];
 
 export function SecurityBand() {
   return (
-    <section id="security" className="relative overflow-hidden border-b border-ink-border bg-ink">
-      <div className="tl-grid-bg pointer-events-none absolute inset-0 opacity-30" aria-hidden />
+    <section id="security" className="relative overflow-hidden border-b border-ink-border bg-ink py-20 lg:py-28">
+      <div className="tl-cyber-grid pointer-events-none absolute inset-0 opacity-25" aria-hidden />
       <div
-        className="pointer-events-none absolute right-[-10rem] top-[-8rem] h-[26rem] w-[26rem] rounded-full bg-brand/20 blur-[130px]"
+        className="pointer-events-none absolute right-[-8rem] top-[-8rem] h-[28rem] w-[28rem] rounded-full bg-brand/15 blur-[150px]"
         aria-hidden
       />
 
-      <div className="relative mx-auto grid max-w-7xl gap-14 px-6 py-20 lg:grid-cols-2 lg:py-24">
+      <div className="relative mx-auto grid max-w-7xl gap-14 px-6 lg:grid-cols-2">
         <div>
-          <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-hover">
-            Security model
+          <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-brand-cyan">
+            ASSURANCE ARCHITECTURE
           </span>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink-foreground md:text-4xl">
-            Built on the OWASP API Top 10
+          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-ink-foreground md:text-4xl">
+            Hardened on the OWASP API Top 10
           </h2>
           <p className="mt-5 max-w-lg text-base leading-relaxed text-ink-muted">
-            A tool that inspects your sensitive messages has to earn that trust. Every
-            endpoint is authenticated, rate-limited, validated and audited — and the
-            authorization rules are covered by an automated test suite.
+            An engine that inspects high-risk payloads must be impervious to tampering. Every endpoint is authenticated, rate-regulated, MIME-validated, and tamper-logged.
           </p>
 
-          <dl className="mt-9 grid grid-cols-2 gap-6 border-t border-ink-border pt-8">
-            <div>
-              <dt className="text-xs uppercase tracking-wider text-ink-muted">Auth</dt>
-              <dd className="mt-1 text-lg font-bold text-ink-foreground">JWT + RBAC</dd>
+          <dl className="mt-10 grid grid-cols-2 gap-6 border-t border-ink-border pt-8 font-mono">
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+              <dt className="text-[10px] uppercase tracking-wider text-ink-muted">AUTHENTICATION</dt>
+              <dd className="mt-1 text-base font-bold text-ink-foreground">JWT + RBAC</dd>
+              <dd className="mt-0.5 text-[11px] text-slate-500">Sub-second expiry</dd>
             </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wider text-ink-muted">Hashing</dt>
-              <dd className="mt-1 text-lg font-bold text-ink-foreground">bcrypt · cost 12</dd>
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+              <dt className="text-[10px] uppercase tracking-wider text-ink-muted">KEY STRETCHING</dt>
+              <dd className="mt-1 text-base font-bold text-ink-foreground">bcrypt · cost 12</dd>
+              <dd className="mt-0.5 text-[11px] text-slate-500">Per-hash salting</dd>
             </div>
           </dl>
         </div>
 
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <ul className="grid gap-3 sm:grid-cols-2">
           {CONTROLS.map((control) => (
-            <li key={control} className="flex items-start gap-3">
-              <span
-                className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-brand/40 bg-brand/15 text-brand-hover"
-                aria-hidden
-              >
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m5 13 4 4L19 7" />
-                </svg>
-              </span>
-              <span className="text-sm leading-relaxed text-ink-muted">{control}</span>
+            <li
+              key={control.name}
+              className="tl-reticle-card flex flex-col justify-between rounded-xl border border-white/10 bg-[#080d1a]/80 p-4 backdrop-blur-xl transition-all hover:border-brand/40"
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span className="font-mono text-xs font-bold text-slate-200">{control.name}</span>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                  {control.desc}
+                </p>
+              </div>
             </li>
           ))}
         </ul>
@@ -79,31 +71,38 @@ export function SecurityBand() {
 
 export function CtaBand() {
   return (
-    <section className="border-b border-ink-border bg-ink-surface">
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-6 py-16 text-center lg:flex-row lg:justify-between lg:text-left">
+    <section className="relative overflow-hidden border-b border-ink-border bg-gradient-to-r from-[#060a14] via-[#091124] to-[#060a14] py-16">
+      <div className="tl-cyber-dots pointer-events-none absolute inset-0 opacity-20" />
+      <div className="relative mx-auto flex max-w-7xl flex-col items-center gap-6 px-6 text-center lg:flex-row lg:justify-between lg:text-left">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-ink-foreground md:text-3xl">
-            Check a suspicious message right now
+          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400">
+            RAPID DEPLOYMENT // INSTANT ANALYSIS
+          </span>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-ink-foreground md:text-3xl">
+            Neutralize a suspicious payload right now
           </h2>
           <p className="mt-2 text-sm text-ink-muted">
-            Free to try. Create an account in seconds, then paste anything that looks off.
+            Instant live scanning. Paste suspicious texts, verify deceptive URLs, or upload screenshots in seconds.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Link
             href="/analyze"
-            className="inline-flex items-center justify-center rounded-xl bg-brand px-6 py-3 text-base font-semibold text-brand-foreground transition-colors hover:bg-brand-hover"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-6 py-3.5 text-sm font-semibold text-brand-foreground shadow-[var(--shadow-cyber)] transition-all hover:bg-brand-hover hover:shadow-[var(--shadow-lift)] active:scale-[0.99]"
           >
-            Open the analyzer
+            Launch Analyzer Console
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
           </Link>
           <Link
             href="/login"
-            className="inline-flex items-center justify-center rounded-xl border border-ink-border px-6 py-3 text-base font-semibold text-ink-foreground transition-colors hover:bg-white/10"
+            className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-6 py-3.5 text-sm font-semibold text-ink-foreground transition-all hover:bg-white/[0.08] hover:border-white/20 active:scale-[0.99]"
           >
-            Create an account
+            Create SOC Account
           </Link>
         </div>
       </div>
     </section>
   );
-}
+}

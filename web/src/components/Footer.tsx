@@ -4,30 +4,30 @@ import { Logo } from './ui';
 
 const COLUMNS: { heading: string; links: { href: string; label: string }[] }[] = [
   {
-    heading: 'Product',
+    heading: 'Platform',
     links: [
-      { href: '/analyze', label: 'Threat analyzer' },
-      { href: '/dashboard', label: 'SOC dashboard' },
+      { href: '/analyze', label: 'Threat Analyzer' },
+      { href: '/dashboard', label: 'SOC Command Center' },
       { href: '/#features', label: 'Capabilities' },
-      { href: '/#how-it-works', label: 'How it works' },
+      { href: '/#pipeline', label: '3D Pipeline Architecture' },
     ],
   },
   {
-    heading: 'Developers',
+    heading: 'Developers & SOC',
     links: [
-      { href: '/docs', label: 'API reference' },
-      { href: '/openapi.json', label: 'OpenAPI schema' },
-      { href: '/redoc', label: 'ReDoc explorer' },
-      { href: '/health', label: 'Service health' },
+      { href: '/docs', label: 'API Specifications' },
+      { href: '/openapi.json', label: 'OpenAPI Schema' },
+      { href: '/redoc', label: 'ReDoc Interactive' },
+      { href: '/health', label: 'Telemetry & Health' },
     ],
   },
   {
-    heading: 'Trust',
+    heading: 'Assurance',
     links: [
-      { href: '/#security', label: 'Security model' },
-      { href: '/#security', label: 'OWASP API Top 10' },
-      { href: '/privacy', label: 'Privacy Policy' },
-      { href: '/#security', label: 'Data handling' },
+      { href: '/#security', label: 'Security Model' },
+      { href: '/#security', label: 'OWASP API Compliance' },
+      { href: '/privacy', label: 'Data Isolation Policy' },
+      { href: '/#security', label: 'Zero-Disk Architecture' },
     ],
   },
 ];
@@ -36,31 +36,34 @@ export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="mt-auto border-t border-ink-border bg-ink">
-      <div className="mx-auto max-w-7xl px-6 py-14">
+    <footer className="mt-auto border-t border-ink-border bg-ink relative overflow-hidden">
+      <div className="tl-cyber-dots pointer-events-none absolute inset-0 opacity-15" />
+
+      <div className="relative mx-auto max-w-7xl px-6 py-16">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            <Logo onInk subtitle="Threat defense platform" />
-            <p className="mt-4 max-w-sm text-sm leading-relaxed text-ink-muted">
-              Multimodal phishing, scam and social-engineering detection with explainable
-              risk scoring, built on a hybrid ML + rules + threat-intelligence engine.
+            <Logo onInk subtitle="Autonomous Deception Defense" />
+            <p className="mt-4 max-w-sm text-xs leading-relaxed text-ink-muted">
+              Multimodal scam, phishing, and social-engineering interception platform.
+              Fusing neural ML classifiers, deterministic fraud heuristics, and IOC threat intelligence into auditable risk verdicts.
             </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <span className="rounded-full border border-ink-border px-2.5 py-1 text-[11px] font-medium text-ink-muted">
-                Explainable AI
+            <div className="mt-6 flex flex-wrap gap-2 font-mono">
+              <span className="rounded-lg border border-white/10 bg-white/[0.02] px-2.5 py-1 text-[10px] text-slate-400">
+                AES-256-GCM
               </span>
-              <span className="rounded-full border border-ink-border px-2.5 py-1 text-[11px] font-medium text-ink-muted">
-                OWASP-aligned
+              <span className="rounded-lg border border-white/10 bg-white/[0.02] px-2.5 py-1 text-[10px] text-slate-400">
+                OWASP TOP 10
               </span>
-              <span className="rounded-full border border-ink-border px-2.5 py-1 text-[11px] font-medium text-ink-muted">
-                Audit-logged
+              <span className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] text-emerald-400 flex items-center gap-1.5 font-bold">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                SYSTEM 100% OPERATIONAL
               </span>
             </div>
           </div>
 
           {COLUMNS.map((column) => (
             <div key={column.heading}>
-              <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-ink-foreground">
+              <h3 className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-ink-foreground">
                 {column.heading}
               </h3>
               <ul className="mt-4 space-y-2.5">
@@ -68,7 +71,7 @@ export default function Footer() {
                   <li key={`${column.heading}-${link.label}`}>
                     <Link
                       href={link.href}
-                      className="text-sm text-ink-muted transition-colors hover:text-ink-foreground"
+                      className="text-xs text-ink-muted transition-colors hover:text-ink-foreground"
                     >
                       {link.label}
                     </Link>
@@ -80,15 +83,18 @@ export default function Footer() {
         </div>
       </div>
 
-      <div className="border-t border-ink-border">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-6 py-6 sm:flex-row">
-          <p className="text-xs text-ink-muted">© {year} TrustLayer AI. All rights reserved.</p>
-          <div className="flex gap-4">
-            <Link href="/privacy" className="text-xs text-ink-muted transition-colors hover:text-ink-foreground">Privacy Policy</Link>
-            <p className="text-xs text-ink-muted">For detection assistance only — always verify with the official source.</p>
+      <div className="border-t border-ink-border/80 bg-[#02050b] py-6">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-6 sm:flex-row text-xs font-mono text-ink-muted">
+          <p>© {year} TrustLayer Defense. All rights reserved.</p>
+          <div className="flex items-center gap-6">
+            <Link href="/privacy" className="hover:text-ink-foreground transition-colors">
+              Privacy Policy
+            </Link>
+            <span className="text-slate-600">·</span>
+            <span>NODE: AP-SOUTHEAST-PROD</span>
           </div>
         </div>
       </div>
     </footer>
   );
-}
+}

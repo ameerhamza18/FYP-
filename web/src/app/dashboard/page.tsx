@@ -30,55 +30,65 @@ import { toast } from 'sonner';
 function StatsPanel({ stats }: { stats: AdminStats }) {
   const cards = [
     {
-      label: 'Analyses',
+      label: 'TOTAL PAYLOADS SCANNED',
       value: formatNumber(stats.total_analyses),
-      hint: 'All time, every user',
+      hint: 'Global traffic throughput',
       tone: 'text-foreground',
+      code: 'METRIC_01',
     },
     {
-      label: 'High / critical',
+      label: 'HIGH / CRITICAL THREATS',
       value: formatNumber(stats.high_risk),
       hint:
         stats.total_analyses > 0
-          ? `${Math.round((stats.high_risk / stats.total_analyses) * 100)}% of traffic`
+          ? `${Math.round((stats.high_risk / stats.total_analyses) * 100)}% of total intercepted`
           : 'No traffic yet',
       tone: 'text-risk-high',
+      code: 'METRIC_02',
     },
     {
-      label: 'Active campaigns',
+      label: 'ACTIVE ATTACK CAMPAIGNS',
       value: formatNumber(stats.active_campaigns),
-      hint: '3+ correlated hits',
+      hint: '3+ correlated multi-user hits',
       tone: 'text-risk-critical',
+      code: 'METRIC_03',
     },
   ];
 
   const categories = [
-    { label: 'Phishing', value: stats.phishing },
-    { label: 'Job scams', value: stats.job_scams },
-    { label: 'Financial fraud', value: stats.financial_fraud },
-    { label: 'Investment', value: stats.investment_scams },
-    { label: 'Prize scams', value: stats.prize_scams },
+    { label: 'Phishing Vectors', value: stats.phishing, code: 'VEC_01' },
+    { label: 'Employment Scams', value: stats.job_scams, code: 'VEC_02' },
+    { label: 'Financial Fraud', value: stats.financial_fraud, code: 'VEC_03' },
+    { label: 'Investment Frauds', value: stats.investment_scams, code: 'VEC_04' },
+    { label: 'Deceptive Rewards', value: stats.prize_scams, code: 'VEC_05' },
   ];
 
   return (
     <>
       <section className="grid gap-4 sm:grid-cols-3">
         {cards.map((card) => (
-          <div key={card.label} className={`${CARD} p-5`}>
+          <div key={card.label} className={`${CARD} p-5 relative overflow-hidden`}>
+            <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 mb-2">
+              <span>{card.code}</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-brand tl-beacon" />
+            </div>
             <Metric label={card.label} value={card.value} hint={card.hint} tone={card.tone} />
           </div>
         ))}
       </section>
 
       <section className={`${CARD} p-5`}>
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted">
-          Threat classification
-        </h2>
+        <div className="flex items-center justify-between border-b border-border-default pb-3">
+          <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-muted">
+            THREAT TAXONOMY BREAKDOWN
+          </h2>
+          <span className="font-mono text-[10px] text-slate-500">REAL-TIME DISTRIBUTION</span>
+        </div>
         <ul className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-5">
           {categories.map((item) => (
-            <li key={item.label} className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-muted">{item.label}</span>
-              <span className="text-lg font-bold tabular-nums text-foreground">
+            <li key={item.label} className="flex items-baseline justify-between gap-3 rounded-xl border border-white/5 bg-surface-muted/40 p-3 font-mono">
+              <span className="text-xs text-muted truncate">{item.label}</span>
+              <span className="text-base font-bold tabular-nums text-foreground">
                 {formatNumber(item.value)}
               </span>
             </li>
@@ -404,38 +414,44 @@ function SocDashboard() {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-5 py-10 lg:px-6 lg:py-12">
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-border-default/80 pb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Security operations</h1>
+          <div className="flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-widest text-brand-cyan">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 tl-beacon" />
+            24/7 SOC THREAT OPERATIONS // RESTRICTED ACCESS
+          </div>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+            Security Operations Center
+          </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-            Organisation-wide threat visibility: classification mix, campaign correlation and the
-            full audit trail. Data is served by the role-restricted admin API.
+            Organisation-wide telemetry: 3D global threat topology, active campaign correlation,
+            manipulation vector distributions, RBAC policy enforcement, and cryptographically verified audit trails.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 font-mono text-xs">
           <button
             type="button"
             onClick={handleExportAudit}
-            className={BTN.secondary}
+            className={`${BTN.secondary} text-xs py-2`}
             title="Download audit trail as CSV"
           >
-            ↓ Audit CSV
+            ↓ AUDIT CSV
           </button>
           <button
             type="button"
             onClick={handleExportThreats}
-            className={BTN.secondary}
+            className={`${BTN.secondary} text-xs py-2`}
             title="Download full threat feed as CSV"
           >
-            ↓ Threat CSV
+            ↓ THREAT CSV
           </button>
           <button
             type="button"
             onClick={handleRefresh}
             disabled={loading}
-            className={BTN.secondary}
+            className={`${BTN.primary} text-xs py-2`}
           >
-            {loading ? 'Refreshing…' : 'Refresh'}
+            {loading ? 'REFRESHING…' : 'SYNC TELEMETRY'}
           </button>
         </div>
       </header>

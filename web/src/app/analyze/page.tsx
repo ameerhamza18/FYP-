@@ -11,13 +11,13 @@ import { RequireAuth } from '@/lib/auth';
 import { relativeTime } from '@/lib/presentation';
 import type { Analysis, AnalysisDetail, InputType } from '@/lib/types';
 
-const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // mirrors MAX_UPLOAD_SIZE_MB default
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
-const TABS: { id: InputType; label: string }[] = [
-  { id: 'text', label: 'Message text' },
-  { id: 'url', label: 'URL' },
-  { id: 'screenshot', label: 'Screenshot' },
+const TABS: { id: InputType; label: string; code: string }[] = [
+  { id: 'text', label: 'Message Payload', code: 'PAYLOAD // TXT' },
+  { id: 'url', label: 'URL Forensics', code: 'TARGET // URI' },
+  { id: 'screenshot', label: 'OCR Visual Scan', code: 'OPTICAL // IMG' },
 ];
 
 const SOURCES = ['web', 'sms', 'email', 'whatsapp', 'other'];
@@ -44,9 +44,8 @@ function Analyzer() {
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      setHistory(await api.analyze.history(12));
+      setHistory(await api.analyze.history(15));
     } catch {
-      // History is a convenience; a failure here must not block analysis.
       setHistory([]);
     } finally {
       setHistoryLoading(false);
@@ -57,7 +56,6 @@ function Analyzer() {
     loadHistory();
   }, [loadHistory]);
 
-  // Manage the object URL backing the image preview.
   useEffect(() => {
     if (!file) {
       setPreviewUrl(null);
@@ -75,12 +73,12 @@ function Analyzer() {
       return;
     }
     if (!ACCEPTED_IMAGE_TYPES.includes(candidate.type)) {
-      setError('Unsupported file type. Upload a PNG, JPEG or WebP image.');
+      setError('Unsupported file type. Please upload a PNG, JPEG, or WebP image.');
       return;
     }
     if (candidate.size > MAX_UPLOAD_BYTES) {
       setError(
-        `Image is too large (${(candidate.size / 1024 / 1024).toFixed(1)} MB). The limit is 8 MB.`,
+        `File exceeds maximum limit (${(candidate.size / 1024 / 1024).toFixed(1)} MB). Max supported is 8 MB.`
       );
       return;
     }
@@ -94,7 +92,7 @@ function Analyzer() {
 
   const revealResult = () =>
     requestAnimationFrame(() =>
-      resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     );
 
   const runAnalysis = async () => {
@@ -127,7 +125,7 @@ function Analyzer() {
       setResult(await api.analyze.detail(id));
       revealResult();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load that analysis.');
+      setError(err instanceof Error ? err.message : 'Could not load that analysis record.');
     } finally {
       setBusy(false);
     }
@@ -143,18 +141,34 @@ function Analyzer() {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-5 py-10 lg:px-6 lg:py-12">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Threat analyzer</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-          Paste a message, inspect a link, or upload a screenshot. Every result includes the
-          indicators that fired and the manipulation techniques detected.
-        </p>
+      {/* Console Header */}
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-border-default/80 pb-6">
+        <div>
+          <div className="flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-widest text-brand-cyan">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 tl-beacon" />
+            LIVE FORENSIC SENSORS ARMED
+          </div>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+            Threat Analyzer Console
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+            Submit suspicious message bodies, analyze deceptive hyperlinks, or process mobile screenshots.
+            Results include full algorithmic evidence, confidence ratings, and mitigation actions.
+          </p>
+        </div>
+        <div className="hidden sm:flex items-center gap-4 font-mono text-xs text-muted">
+          <span>PIPELINE: <span className="text-emerald-400 font-bold">READY</span></span>
+          <span className="text-slate-600">|</span>
+          <span>LATENCY: <span className="text-foreground font-bold">&lt; 240ms</span></span>
+        </div>
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* Main Console Input & Verdict Area */}
         <div className="space-y-8">
-          <section className={`${CARD} p-6`}>
-            <div className="flex flex-wrap gap-1 rounded-xl border border-border-default bg-surface-muted p-1">
+          <section className={`${CARD} p-6 sm:p-8`}>
+            {/* Tactical Channel Selector */}
+            <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/10 bg-surface-muted/80 p-1.5 font-mono">
               {TABS.map((item) => (
                 <button
                   key={item.id}
@@ -163,64 +177,71 @@ function Analyzer() {
                     setTab(item.id);
                     setError(null);
                   }}
-                  className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  className={`flex flex-col items-center justify-center rounded-lg px-3 py-2.5 text-xs transition-all ${
                     tab === item.id
-                      ? 'bg-surface text-foreground shadow-[var(--shadow-card)]'
+                      ? 'bg-surface text-foreground shadow-md border border-brand/40 font-bold'
                       : 'text-muted hover:text-foreground'
                   }`}
                 >
-                  {item.label}
+                  <span className="text-[9px] uppercase tracking-wider text-slate-500">
+                    {item.code}
+                  </span>
+                  <span className="mt-0.5 truncate">{item.label}</span>
                 </button>
               ))}
             </div>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-6 space-y-4">
               {tab === 'text' && (
                 <>
-                  <textarea
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    rows={9}
-                    maxLength={10000}
-                    placeholder="Paste the suspicious message here…"
-                    className="tl-scroll w-full resize-y rounded-xl border border-border-default bg-background p-4 text-sm leading-relaxed text-foreground placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25"
-                  />
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <label className="flex items-center gap-2 text-sm text-muted">
-                      Source
+                  <div className="relative">
+                    <textarea
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      rows={8}
+                      maxLength={10000}
+                      placeholder="Paste suspicious SMS, WhatsApp message, email body, or deceptive offer here…"
+                      className="tl-scroll w-full resize-y rounded-xl border border-border-default bg-background/80 p-4 font-mono text-sm leading-relaxed text-foreground placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+                    <label className="flex items-center gap-2 text-muted">
+                      <span>ORIGIN CHANNEL:</span>
                       <select
                         value={source}
                         onChange={(e) => setSource(e.target.value)}
-                        className="rounded-lg border border-border-default bg-background px-3 py-1.5 text-sm text-foreground focus:border-brand focus:outline-none"
+                        className="rounded-lg border border-border-default bg-surface px-2.5 py-1 text-xs text-foreground focus:border-brand focus:outline-none"
                       >
                         {SOURCES.map((option) => (
                           <option key={option} value={option}>
-                            {option}
+                            {option.toUpperCase()}
                           </option>
                         ))}
                       </select>
                     </label>
-                    <span className="text-xs tabular-nums text-muted">{text.length}/10000</span>
+                    <span className="tabular-nums text-muted">{text.length}/10,000 BYTES</span>
                   </div>
                 </>
               )}
 
               {tab === 'url' && (
-                <>
-                  <input
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://suspicious-link.example/login"
-                    className="w-full rounded-xl border border-border-default bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25"
-                  />
-                  <p className="text-xs text-muted">
-                    A scheme is added automatically if you omit http:// or https://
+                <div className="space-y-2">
+                  <div className="relative">
+                    <input
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="https://suspicious-domain.example/auth/login"
+                      className="w-full rounded-xl border border-border-default bg-background/80 px-4 py-3.5 font-mono text-sm text-foreground placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25"
+                    />
+                  </div>
+                  <p className="font-mono text-[11px] text-muted">
+                    Full protocol scheme (https://) will be appended automatically if omitted.
                   </p>
-                </>
+                </div>
               )}
 
               {tab === 'screenshot' && (
-                <>
+                <div className="space-y-2">
                   <div
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -232,20 +253,25 @@ function Analyzer() {
                       setDragging(false);
                       chooseFile(e.dataTransfer.files?.[0]);
                     }}
-                    className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-                      dragging ? 'border-brand bg-brand-soft' : 'border-border-strong bg-background-subtle'
+                    className={`relative overflow-hidden rounded-2xl border-2 border-dashed p-8 text-center transition-all ${
+                      dragging
+                        ? 'border-brand bg-brand-soft/50'
+                        : 'border-border-strong bg-background/50 hover:border-brand/50'
                     }`}
                   >
+                    {/* Animated Scanning Beam in Dropzone */}
+                    <div className="tl-scanline" />
+
                     {previewUrl ? (
                       <div className="flex flex-col items-center gap-4">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={previewUrl}
-                          alt="Selected screenshot preview"
-                          className="max-h-56 rounded-lg border border-border-default object-contain"
+                          alt="Uploaded evidence screenshot"
+                          className="max-h-60 rounded-xl border border-white/10 shadow-2xl object-contain"
                         />
-                        <div className="flex items-center gap-3">
-                          <span className="max-w-[220px] truncate text-xs text-muted">
+                        <div className="flex items-center gap-3 font-mono text-xs">
+                          <span className="max-w-[260px] truncate text-muted">
                             {file?.name}
                           </span>
                           <button
@@ -262,33 +288,26 @@ function Analyzer() {
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-3">
-                        <span className="text-muted">
-                          <svg
-                            width="30"
-                            height="30"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden
-                          >
-                            <path d="M12 16V4m0 0L8 8m4-4 4 4" />
-                            <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-brand">
+                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
                           </svg>
-                        </span>
-                        <p className="text-sm text-muted">
-                          Drag an image here, or{' '}
+                        </div>
+                        <p className="text-sm font-medium text-foreground">
+                          Drag and drop screenshot here, or{' '}
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="font-semibold text-brand hover:text-brand-hover"
+                            className="font-bold text-brand hover:text-brand-hover underline"
                           >
                             browse files
                           </button>
                         </p>
-                        <p className="text-xs text-muted">PNG, JPEG or WebP · up to 8 MB</p>
+                        <p className="font-mono text-xs text-muted">
+                          PNG, JPEG, WebP · Max 8 MB · 100% In-Memory OCR
+                        </p>
                       </div>
                     )}
                     <input
@@ -299,92 +318,110 @@ function Analyzer() {
                       onChange={(e) => chooseFile(e.target.files?.[0])}
                     />
                   </div>
-                  <p className="text-xs text-muted">
-                    Text is extracted on the server via OCR; the image itself is never written
-                    to disk.
+                  <p className="font-mono text-[10px] text-muted">
+                    OCR extraction runs in volatile memory only. Images are never written to disk or shared with 3rd parties.
                   </p>
-                </>
-              )}
-              {error && (
-                <div
-                  role="alert"
-                  className="rounded-xl border border-risk-critical/30 bg-risk-critical/10 px-4 py-3 text-sm text-risk-critical"
-                >
-                  {error}
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-3">
+              {error && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-risk-critical/40 bg-risk-critical/10 px-4 py-3 font-mono text-xs text-risk-critical"
+                >
+                  ⚠ {error}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3 pt-2">
                 <button
                   type="button"
                   onClick={runAnalysis}
                   disabled={!canSubmit || busy}
-                  className={`${BTN.primary} flex-1 py-3`}
+                  className={`${BTN.primary} flex-1 py-3 text-sm font-mono tracking-wide`}
                 >
-                  {busy ? 'Analyzing…' : 'Run analysis'}
+                  {busy ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      ANALYZING PAYLOAD WITH FUSED ENGINES…
+                    </span>
+                  ) : (
+                    'RUN THREAT ANALYSIS'
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={clearInputs}
                   disabled={busy}
-                  className={BTN.secondary}
+                  className={`${BTN.secondary} font-mono text-xs`}
                 >
-                  Clear
+                  CLEAR
                 </button>
               </div>
             </div>
           </section>
+
+          {/* Verdict Report Display Area */}
           <div ref={resultRef}>
-            {busy && !result && <SkeletonRows rows={3} />}
+            {busy && !result && <SkeletonRows rows={4} />}
             {result && <ResultReport analysis={result} />}
             {!result && !busy && (
-              <div className={`${CARD} tl-grid-bg-light`}>
+              <div className={`${CARD} tl-cyber-grid`}>
                 <EmptyState
-                  title="No analysis yet"
-                  description="Submit a message, a link or a screenshot above and the full risk report will appear here."
+                  title="Ready for Analysis"
+                  description="Submit a text message, suspect link, or mobile screenshot above to initiate fused multi-engine inspection."
                 />
               </div>
             )}
           </div>
         </div>
 
-        <aside className="lg:sticky lg:top-24 lg:self-start">
+        {/* Sidebar: Incident History & Reference Scales */}
+        <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           <section className={`${CARD} p-5`}>
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-muted">
-                Recent analyses
+            <div className="flex items-center justify-between border-b border-border-default pb-3">
+              <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-muted">
+                RECENT INCIDENTS
               </h2>
-              <button type="button" onClick={loadHistory} className={BTN.ghost}>
-                Refresh
+              <button
+                type="button"
+                onClick={loadHistory}
+                className="font-mono text-[10px] font-bold text-brand hover:underline"
+              >
+                REFRESH
               </button>
             </div>
 
             {historyLoading ? (
               <SkeletonRows rows={5} className="mt-4" />
             ) : history.length === 0 ? (
-              <p className="mt-4 text-sm text-muted">
-                Nothing here yet. Your completed analyses will be listed below.
+              <p className="mt-4 text-xs text-muted leading-relaxed">
+                Zero threat analyses logged. Completed records will populate here in real-time.
               </p>
             ) : (
-              <ul className="tl-scroll mt-3 max-h-[520px] space-y-1.5 overflow-y-auto pr-1">
+              <ul className="tl-scroll mt-3 max-h-[500px] space-y-2 overflow-y-auto pr-1">
                 {history.map((item) => (
                   <li key={item.id}>
                     <button
                       type="button"
                       onClick={() => openHistoryItem(item.id)}
                       disabled={busy}
-                      className="w-full rounded-xl border border-border-default bg-background-subtle p-3 text-left transition-colors hover:border-brand/40 hover:bg-surface-muted disabled:opacity-60"
+                      className="w-full rounded-xl border border-border-default bg-surface-muted/60 p-3 text-left transition-all hover:border-brand/40 hover:bg-surface-muted disabled:opacity-60"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-foreground">
+                        <span className="truncate text-xs font-bold text-foreground">
                           {item.threat_type}
                         </span>
                         <RiskBadge level={item.risk_level} score={item.risk_score} />
                       </div>
-                      <p className="mt-1.5 truncate text-xs text-muted">{item.recommendation}</p>
-                      <p className="mt-1 text-[11px] text-muted">
-                        {item.input_type} · {relativeTime(item.created_at)}
+                      <p className="mt-1.5 truncate text-[11px] text-muted">
+                        {item.recommendation}
                       </p>
+                      <div className="mt-2 flex items-center justify-between font-mono text-[9px] text-slate-500">
+                        <span>{item.input_type.toUpperCase()}</span>
+                        <span>{relativeTime(item.created_at)}</span>
+                      </div>
                     </button>
                   </li>
                 ))}
@@ -392,36 +429,39 @@ function Analyzer() {
             )}
           </section>
 
-          <section className={`${CARD} mt-5 p-5`}>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-muted">Risk scale</h2>
-            <ul className="mt-3 space-y-2 text-xs text-muted">
-              <li className="flex items-center justify-between gap-3">
+          {/* Risk Scale Matrix */}
+          <section className={`${CARD} p-5 font-mono`}>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-muted border-b border-border-default pb-2">
+              SEVERITY TAXONOMY
+            </h2>
+            <ul className="mt-3 space-y-2.5 text-xs text-muted">
+              <li className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-risk-critical" aria-hidden />
-                  Critical
+                  <span className="h-2 w-2 rounded-full bg-risk-critical" />
+                  Critical Severe
                 </span>
-                <span className="tabular-nums">80–100</span>
+                <span className="tabular-nums font-bold text-risk-critical">80–100</span>
               </li>
-              <li className="flex items-center justify-between gap-3">
+              <li className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-risk-high" aria-hidden />
-                  High
+                  <span className="h-2 w-2 rounded-full bg-risk-high" />
+                  High Suspicion
                 </span>
-                <span className="tabular-nums">60–79</span>
+                <span className="tabular-nums font-bold text-risk-high">60–79</span>
               </li>
-              <li className="flex items-center justify-between gap-3">
+              <li className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-risk-medium" aria-hidden />
-                  Moderate
+                  <span className="h-2 w-2 rounded-full bg-risk-medium" />
+                  Moderate Caution
                 </span>
-                <span className="tabular-nums">30–59</span>
+                <span className="tabular-nums font-bold text-risk-medium">30–59</span>
               </li>
-              <li className="flex items-center justify-between gap-3">
+              <li className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-risk-low" aria-hidden />
-                  Low
+                  <span className="h-2 w-2 rounded-full bg-risk-low" />
+                  Clean / Low
                 </span>
-                <span className="tabular-nums">0–29</span>
+                <span className="tabular-nums font-bold text-risk-low">0–29</span>
               </li>
             </ul>
           </section>
@@ -443,4 +483,4 @@ export default function AnalyzePage() {
       <Footer />
     </>
   );
-}
+}

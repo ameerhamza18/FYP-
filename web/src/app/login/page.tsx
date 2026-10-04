@@ -13,16 +13,14 @@ import { toast } from 'sonner';
 
 type Mode = 'signin' | 'register';
 
-/** Only allow internal absolute paths; reject protocol-relative and absolute URLs. */
 function safeNext(value: string | null): string {
   if (!value) return '/analyze';
   if (!value.startsWith('/') || value.startsWith('//')) return '/analyze';
   return value;
 }
 
-// Validation schemas
 const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: z.string().email('Invalid email address format'),
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -31,14 +29,13 @@ const registerSchema = loginSchema.extend({
     .min(8, 'Password must be at least 8 characters')
     .regex(/[A-Z]/, 'Must contain an uppercase letter')
     .regex(/[a-z]/, 'Must contain a lowercase letter')
-    .regex(/\d/, 'Must contain a digit'),
+    .regex(/\d/, 'Must contain a numeric digit'),
   confirm: z.string(),
 }).refine((data) => data.password === data.confirm, {
   message: 'Passwords do not match',
   path: ['confirm'],
 });
 
-type LoginValues = z.infer<typeof loginSchema>;
 type RegisterValues = z.infer<typeof registerSchema>;
 
 export default function LoginPage() {
@@ -48,7 +45,6 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>('signin');
   const [next, setNext] = useState('/analyze');
 
-  // Form setup
   const methods = useForm<RegisterValues>({
     resolver: mode === 'register' ? zodResolver(registerSchema) : zodResolver(loginSchema as any),
     defaultValues: {
@@ -61,7 +57,6 @@ export default function LoginPage() {
   const {
     register: registerField,
     handleSubmit,
-    setValue,
     reset,
     formState: { errors, isSubmitting },
   } = methods;
@@ -89,189 +84,184 @@ export default function LoginPage() {
       }
       router.replace(next);
     } catch (err: any) {
-      toast.error(err.message || 'Something went wrong. Try again.');
+      toast.error(err.message || 'Authentication failed. Please verify credentials.');
     }
   };
 
   const isRegister = mode === 'register';
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
+    <div className="flex min-h-screen flex-col lg:flex-row bg-background">
+      {/* Left Obsidian Security Band */}
       <aside className="relative hidden overflow-hidden border-ink-border bg-ink lg:flex lg:w-[46%] lg:flex-col lg:justify-between lg:border-r lg:p-12">
-        <div className="tl-grid-bg pointer-events-none absolute inset-0 opacity-30" aria-hidden />
+        <div className="tl-cyber-grid pointer-events-none absolute inset-0 opacity-25" aria-hidden />
         <div
-          className="pointer-events-none absolute -left-24 top-1/3 h-96 w-96 rounded-full bg-brand/20 blur-[130px]"
+          className="pointer-events-none absolute -left-24 top-1/3 h-96 w-96 rounded-full bg-brand/20 blur-[140px]"
           aria-hidden
         />
 
         <div className="relative">
           <Link href="/" aria-label="TrustLayer home">
-            <Logo onInk size={34} subtitle="Threat defense platform" />
+            <Logo onInk size={36} subtitle="DECEPTION DEFENSE PLATFORM" />
           </Link>
         </div>
 
         <div className="relative max-w-md">
-          <h2 className="text-3xl font-bold leading-tight tracking-tight text-ink-foreground">
-            One score.
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-[10px] text-brand-cyan mb-4">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 tl-beacon" />
+            SECURE ACCESS GATEWAY
+          </div>
+          <h2 className="text-3xl font-extrabold leading-tight tracking-tight text-ink-foreground">
+            Unified threat telemetry.
             <br />
-            Every signal behind it.
+            Forensic certainty.
           </h2>
           <p className="mt-4 text-sm leading-relaxed text-ink-muted">
-            Sign in to run analyses, keep a personal history of everything you have
-            checked, and — if you are an administrator — open the live SOC dashboard.
+            Authenticate to access the live threat analyzer, maintain persistent incident records,
+            and inspect organisation-wide telemetry across our fused multi-engine matrix.
           </p>
 
-          <ul className="mt-8 space-y-3">
+          <ul className="mt-8 space-y-3 font-mono text-xs text-slate-300">
             {[
-              'Multimodal: text, URL and screenshot',
-              'Indicators and manipulation techniques listed',
-              'Audit-logged and rate-limited by default',
+              'Multimodal payloads: raw text, hyperlinks, mobile screenshots',
+              'Deterministic rule triggers & deception tactics exposed',
+              'Append-only cryptographic audit logs & rate-limiting',
             ].map((item) => (
-              <li key={item} className="flex items-start gap-3 text-sm text-ink-muted">
-                <span
-                  className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-brand/40 bg-brand/15 text-brand-hover"
-                  aria-hidden
-                >
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="m5 13 4 4L19 7" />
-                  </svg>
+              <li key={item} className="flex items-start gap-3">
+                <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand/20 text-brand-cyan text-[10px] font-bold">
+                  ✓
                 </span>
-                {item}
+                <span className="leading-relaxed text-ink-muted">{item}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="relative text-xs text-ink-muted">
-          Detection assistance only — always verify with the official source.
+        <p className="relative font-mono text-[11px] text-slate-500">
+          PROTECTED BY ZERO-DISK IN-MEMORY PROCESSING · SHA-256 VERIFIED
         </p>
       </aside>
 
+      {/* Right Auth Portal */}
       <main className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
-          <div className="lg:hidden">
+          <div className="lg:hidden mb-6">
             <Link href="/" aria-label="TrustLayer home">
-              <Logo size={30} />
+              <Logo size={32} />
             </Link>
           </div>
 
-          <h1 className="mt-8 text-2xl font-bold tracking-tight text-foreground lg:mt-0">
-            {isRegister ? 'Create your account' : 'Welcome back'}
-          </h1>
-          <p className="mt-2 text-sm text-muted">
-            {isRegister
-              ? 'Free to use — start checking suspicious messages in seconds.'
-              : 'Sign in to run analyses and view your history.'}
-          </p>
-
-          <div className="mt-7 inline-flex rounded-xl border border-border-default bg-surface-muted p-1">
-            {(['signin', 'register'] as Mode[]).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => switchMode(value)}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                  mode === value
-                    ? 'bg-surface text-foreground shadow-[var(--shadow-card)]'
-                    : 'text-muted hover:text-foreground'
-                }`}
-              >
-                {value === 'signin' ? 'Sign in' : 'Create account'}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4" noValidate>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="email" className="text-sm font-medium text-foreground">
-                Email address
-              </label>
-              <input
-                {...registerField('email')}
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@company.com"
-                className={`${INPUT} ${errors.email ? 'border-risk-critical' : ''}`}
-              />
-              {errors.email && <p className="text-xs text-risk-critical">{errors.email.message}</p>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label htmlFor="password" className="text-sm font-medium text-foreground">
-                Password
-              </label>
-              <input
-                {...registerField('password')}
-                id="password"
-                type="password"
-                autoComplete={isRegister ? 'new-password' : 'current-password'}
-                placeholder={isRegister ? 'At least 8 characters' : '••••••••'}
-                className={`${INPUT} ${errors.password ? 'border-risk-critical' : ''}`}
-              />
-              {errors.password && <p className="text-xs text-risk-critical">{errors.password.message}</p>}
-              {isRegister && (
-                <p className="mt-1.5 text-xs text-muted">
-                  8+ characters with an uppercase letter, a lowercase letter and a digit.
+          <div className="tl-reticle-card rounded-2xl border border-border-default/80 bg-surface/90 p-8 shadow-2xl backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-border-default/80 pb-4">
+              <div>
+                <h1 className="text-xl font-extrabold tracking-tight text-foreground">
+                  {isRegister ? 'Create Security Account' : 'Authenticate Principal'}
+                </h1>
+                <p className="mt-1 text-xs text-muted">
+                  {isRegister
+                    ? 'Deploy instant protection across web and mobile.'
+                    : 'Enter your credentials to access the console.'}
                 </p>
-              )}
+              </div>
+              <span className="h-2 w-2 rounded-full bg-emerald-400 tl-beacon" />
             </div>
 
-            {isRegister && (
-              <div className="flex flex-col gap-1">
-                <label htmlFor="confirm" className="text-sm font-medium text-foreground">
-                  Confirm password
+            {/* Mode Switcher */}
+            <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-surface-muted/80 p-1 font-mono text-xs">
+              {(['signin', 'register'] as Mode[]).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => switchMode(value)}
+                  className={`rounded-lg py-2 font-bold uppercase transition-all ${
+                    mode === value
+                      ? 'bg-surface text-foreground shadow-sm border border-brand/30'
+                      : 'text-muted hover:text-foreground'
+                  }`}
+                >
+                  {value === 'signin' ? 'Sign In' : 'Register'}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4" noValidate>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="email" className="font-mono text-xs font-semibold text-foreground">
+                  PRINCIPAL EMAIL
                 </label>
                 <input
-                  {...registerField('confirm')}
-                  id="confirm"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="Repeat your password"
-                  className={`${INPUT} ${errors.confirm ? 'border-risk-critical' : ''}`}
+                  {...registerField('email')}
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="analyst@domain.com"
+                  className={`${INPUT} ${errors.email ? 'border-risk-critical' : ''}`}
                 />
-                {errors.confirm && <p className="text-xs text-risk-critical">{errors.confirm.message}</p>}
+                {errors.email && <p className="font-mono text-[11px] text-risk-critical">{errors.email.message}</p>}
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`${BTN.primary} w-full py-3`}
-            >
-              {isSubmitting
-                ? isRegister
-                  ? 'Creating account…'
-                  : 'Signing in…'
-                : isRegister
-                  ? 'Create account'
-                  : 'Sign in'}
-            </button>
-          </form>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="password" className="font-mono text-xs font-semibold text-foreground">
+                  PASSWORD
+                </label>
+                <input
+                  {...registerField('password')}
+                  id="password"
+                  type="password"
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  placeholder={isRegister ? '8+ chars (upper, lower, digit)' : '••••••••'}
+                  className={`${INPUT} ${errors.password ? 'border-risk-critical' : ''}`}
+                />
+                {errors.password && <p className="font-mono text-[11px] text-risk-critical">{errors.password.message}</p>}
+              </div>
 
-          <p className="mt-6 text-center text-sm text-muted">
-            {isRegister ? 'Already have an account? ' : 'New to TrustLayer? '}
-            <button
-              type="button"
-              onClick={() => switchMode(isRegister ? 'signin' : 'register')}
-              className="font-semibold text-brand hover:text-brand-hover"
-            >
-              {isRegister ? 'Sign in' : 'Create one free'}
-            </button>
-          </p>
+              {isRegister && (
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="confirm" className="font-mono text-xs font-semibold text-foreground">
+                    CONFIRM PASSWORD
+                  </label>
+                  <input
+                    {...registerField('confirm')}
+                    id="confirm"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Repeat password"
+                    className={`${INPUT} ${errors.confirm ? 'border-risk-critical' : ''}`}
+                  />
+                  {errors.confirm && <p className="font-mono text-[11px] text-risk-critical">{errors.confirm.message}</p>}
+                </div>
+              )}
 
-          <p className="mt-8 text-center text-xs text-muted">
-            <Link href="/" className="hover:text-foreground">
-              ← Back to home
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`${BTN.primary} w-full py-3.5 font-mono text-xs font-bold tracking-wider mt-2`}
+              >
+                {isSubmitting
+                  ? isRegister
+                    ? 'PROVISIONING ACCOUNT…'
+                    : 'AUTHENTICATING…'
+                  : isRegister
+                    ? 'PROVISION ACCOUNT'
+                    : 'ACCESS CONSOLE'}
+              </button>
+            </form>
+
+            <p className="mt-6 text-center text-xs text-muted font-mono">
+              {isRegister ? 'Already registered? ' : 'Need credentials? '}
+              <button
+                type="button"
+                onClick={() => switchMode(isRegister ? 'signin' : 'register')}
+                className="font-bold text-brand hover:underline"
+              >
+                {isRegister ? 'Sign in' : 'Create account'}
+              </button>
+            </p>
+          </div>
+
+          <p className="mt-6 text-center font-mono text-xs text-muted">
+            <Link href="/" className="hover:text-foreground transition-colors">
+              ← Return to Home Overview
             </Link>
           </p>
         </div>
@@ -279,3 +269,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
