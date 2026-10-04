@@ -79,7 +79,7 @@ class Analysis(Base):
 
     risk_score = Column(Integer, nullable=False)  # 0-100
     risk_level = Column(String(16), nullable=False)  # LOW | MEDIUM | HIGH | CRITICAL
-    threat_type = Column(String(64), nullable=False)
+    threat_type = Column(String(64), nullable=False, index=True)
 
     ml_score = Column(Float, nullable=True)
     rule_score = Column(Float, nullable=True)
@@ -164,3 +164,21 @@ class AuditLog(Base):
     user_agent = Column(String(255), nullable=True)
     meta = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now, index=True)
+
+
+class Notification(Base):
+    """In-app notifications for security events, detections, and alerts."""
+
+    __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notifications_user_read", "user_id", "is_read"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    message = Column(String(1000), nullable=False)
+    notification_type = Column(String(32), nullable=False, default="alert")  # alert | campaign | system
+    is_read = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now, index=True)
+

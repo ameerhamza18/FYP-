@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.schemas import LoginIn, RegisterIn, TokenOut, UserOut
+from app.schemas import LoginIn, PasswordChangeIn, RegisterIn, TokenOut, UserOut
 from app.security.audit import audit
 from app.security.auth import (
     access_token_ttl_seconds,
@@ -106,6 +106,26 @@ def me(user: User = Depends(get_current_user)):
     return user
 
 
+@router.post("/password", status_code=status.HTTP_200_OK)
+def change_password(payload: PasswordChangeIn, request: Request,
+                    user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Allow authenticated user to change their account password securely."""
+    if not verify_password(payload.old_password, user.password_hash):
+        audit(db, "PASSWORD_CHANGE_FAILED", user_id=user.id, resource=user.email,
+              ip=request.client.host if request.client else None)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+
+    if verify_password(payload.new_password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="New password must be different from current password")
+
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    audit(db, "PASSWORD_CHANGED", user_id=user.id, resource=user.email,
+          ip=request.client.host if request.client else None)
+    return {"status": "success", "message": "Password updated successfully"}
+
+
 @router.delete("/me", status_code=status.HTTP_200_OK)
 def delete_me(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Delete current user account and data (Google Play Policy requirement)."""
@@ -122,9 +142,11 @@ def delete_me(request: Request, user: User = Depends(get_current_user), db: Sess
           ip=request.client.host if request.client else None)
 
     # Clean up user's analyses and findings
-    from app.models import Analysis
+    from app.models import Analysis, Notification
+    db.query(Notification).filter(Notification.user_id == user_id).delete()
     db.query(Analysis).filter(Analysis.user_id == user_id).delete()
     db.delete(user)
     db.commit()
     return {"status": "success", "message": f"Account {email} permanently deleted"}
+
 

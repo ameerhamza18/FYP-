@@ -107,7 +107,7 @@ async function parseError(response: Response): Promise<string> {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Set for multipart uploads so the browser supplies the boundary. */
   formData?: FormData;
@@ -145,7 +145,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       body: payload,
       signal,
       cache: 'no-store',
-      credentials: 'include', // Ensure cookies are sent with every request
+      credentials: 'include',
     });
   } catch {
     throw new ApiError(
@@ -183,6 +183,11 @@ export const api = {
         anonymous: true,
       }),
     me: () => request<User>('/auth/me'),
+    changePassword: (old_password: string, new_password: string) =>
+      request<{ status: string; message: string }>('/auth/password', {
+        method: 'POST',
+        body: { old_password, new_password },
+      }),
   },
   analyze: {
     text: (text: string, source = 'web') =>
@@ -197,9 +202,18 @@ export const api = {
     },
     history: (limit = 20) => request<Analysis[]>(`/analyze/history?limit=${limit}`),
     detail: (id: number) => request<AnalysisDetail>(`/analyze/${id}`),
+    exportReport: (id: number) => request<any>(`/analyze/${id}/export-report`),
+  },
+  notifications: {
+    list: (limit = 50) => request<any[]>(`/notifications?limit=${limit}`),
+    unreadCount: () => request<{ unread_count: number }>('/notifications/unread-count'),
+    markRead: (id: number) => request<any>(`/notifications/${id}/read`, { method: 'PATCH' }),
+    markAllRead: () => request<{ status: string }>('/notifications/read-all', { method: 'POST' }),
+    delete: (id: number) => request<{ status: string }>(`/notifications/${id}`, { method: 'DELETE' }),
   },
   admin: {
     stats: () => request<AdminStats>('/admin/stats'),
+    metrics: () => request<any>('/admin/metrics'),
     analyses: (
       params: { limit?: number; offset?: number; riskLevel?: string; inputType?: string } = {},
     ) => {
@@ -213,13 +227,26 @@ export const api = {
     campaigns: () => request<Campaign[]>('/admin/campaigns'),
     auditLogs: (limit = 50) => request<AuditLog[]>(`/admin/audit-logs?limit=${limit}`),
     users: () => request<AdminUser[]>('/admin/users'),
+    toggleUserStatus: (userId: number, isActive: boolean) =>
+      request<{ status: string; is_active: boolean }>(`/admin/users/${userId}/status`, {
+        method: 'PATCH',
+        body: { is_active: isActive },
+      }),
+    updateUserRole: (userId: number, role: 'admin' | 'user') =>
+      request<{ status: string; role: string }>(`/admin/users/${userId}/role`, {
+        method: 'PATCH',
+        body: { role },
+      }),
+    deleteUser: (userId: number) =>
+      request<{ status: string; message: string }>(`/admin/users/${userId}`, {
+        method: 'DELETE',
+      }),
     exportAuditLogsCsv: () => {
       const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
       const base = API_BASE_URL.replace(/\/api$/, '');
       const url = `${base}/api/admin/export/audit-logs/csv`;
       const a = document.createElement('a');
       a.href = token ? `${url}?token=${encodeURIComponent(token)}` : url;
-      // Use fetch with auth header instead for security
       fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
         .then((r) => r.blob())
         .then((blob) => {
@@ -247,3 +274,4 @@ export const api = {
     },
   },
 };
+

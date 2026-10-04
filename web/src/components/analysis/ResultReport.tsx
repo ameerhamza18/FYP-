@@ -3,6 +3,8 @@ import RiskVortex from '@/components/analysis/RiskVortex';
 import { CARD, Chip, RiskBadge } from '@/components/ui';
 import { riskTone, TONE_BG, TONE_TEXT } from '@/lib/presentation';
 import type { AnalysisDetail } from '@/lib/types';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 /**
  * Engine channels. `ml_score` is a 0–1 probability while the rule, intel and
@@ -40,6 +42,23 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
   const tone = riskTone(analysis.risk_level);
   const rows = engineRows(analysis);
 
+  const handleExportReport = async () => {
+    try {
+      const data = await api.analyze.exportReport(analysis.id);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `TrustLayer_Report_IR_${analysis.id}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Official Forensic Incident Report downloaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to export report');
+    }
+  };
+
+
   return (
     <div className="space-y-5">
       {/* Verdict */}
@@ -70,8 +89,20 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
                 {analysis.recommendation}
               </p>
             </div>
+
+            <div className="mt-4 flex items-center justify-center sm:justify-start gap-3">
+              <button
+                type="button"
+                onClick={handleExportReport}
+                className="flex items-center gap-2 rounded-xl border border-brand/30 bg-brand/10 px-3.5 py-2 text-xs font-semibold text-brand transition-colors hover:bg-brand/20"
+                title="Download verifiable incident report for bank or police submission"
+              >
+                <span>📄</span> Export Forensic Report (JSON)
+              </button>
+            </div>
           </div>
         </div>
+
 
         {/* Engine breakdown */}
         <div className="border-t border-border-default bg-background-subtle px-6 py-5 sm:px-8">

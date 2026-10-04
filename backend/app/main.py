@@ -56,26 +56,48 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+import uuid
+from fastapi.responses import JSONResponse
+
 # --- Middleware LIFO execution: RateLimitMiddleware first, then CORSMiddleware so CORS headers wrap 429s ---
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
 
 
 @app.middleware("http")
-async def security_headers(request: Request, call_next):
-    """Attach hardening headers to every response (OWASP secure-headers)."""
-    response = await call_next(request)
+async def request_id_and_security_headers(request: Request, call_next):
+    """Attach correlation X-Request-ID and hardening headers to every response."""
+    req_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    request.state.request_id = req_id
+
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        logger.exception("Unhandled error on %s %s [req_id=%s]: %s",
+                         request.method, request.url.path, req_id, exc)
+        if settings.is_production:
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": "An internal server error occurred.", "request_id": req_id},
+            )
+        else:
+            raise
+
+    response.headers["X-Request-ID"] = req_id
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-    response.headers.setdefault("Content-Security-Policy", "default-src 'self'")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' http: https: ws: wss:"
+    )
     if settings.is_production:
         response.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
@@ -87,12 +109,16 @@ async def security_headers(request: Request, call_next):
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+from app.routers import notifications
+
 app.include_router(auth.router)
 app.include_router(analyze.router)
 app.include_router(admin.router)
+app.include_router(notifications.router)
 
 
 def _bootstrap_admin() -> None:
+
     """Create the admin account from configured bootstrap secrets (first run)."""
     db = SessionLocal()
     try:

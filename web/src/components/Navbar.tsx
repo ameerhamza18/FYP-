@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import ThemeToggle from './ThemeToggle';
 import { Logo } from './ui';
+import NotificationTray from './NotificationTray';
+import PasswordChangeModal from './PasswordChangeModal';
 
 const MARKETING_LINKS = [
   { href: '/#features', label: 'Features' },
@@ -19,6 +21,8 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+
 
   // Close the mobile panel whenever the route changes.
   useEffect(() => {
@@ -68,24 +72,37 @@ export default function Navbar() {
           <ThemeToggle onInk />
 
           {ready && user ? (
-            <div className="hidden items-center gap-3 sm:flex">
-              <span className="max-w-[180px] truncate text-xs text-ink-muted" title={user.email}>
+            <div className="hidden items-center gap-2 sm:gap-3 sm:flex">
+              <NotificationTray />
+
+              <span className="max-w-[160px] truncate text-xs text-ink-muted" title={user.email}>
                 {user.email}
                 {isAdmin && (
-                  <span className="ml-2 rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-hover">
+                  <span className="ml-1.5 rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-hover">
                     admin
                   </span>
                 )}
               </span>
+
+              <button
+                type="button"
+                onClick={() => setPasswordModalOpen(true)}
+                className="rounded-xl border border-ink-border bg-white/5 px-2.5 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-white/10 hover:text-ink-foreground"
+                title="Change account password"
+              >
+                Password
+              </button>
+
               <button
                 type="button"
                 onClick={handleLogout}
-                className="rounded-xl border border-ink-border bg-white/5 px-3.5 py-2 text-sm font-semibold text-ink-foreground transition-colors hover:bg-white/10"
+                className="rounded-xl border border-ink-border bg-white/5 px-3 py-1.5 text-xs font-semibold text-ink-foreground transition-colors hover:bg-white/10"
               >
                 Sign out
               </button>
             </div>
           ) : (
+
             <div className="hidden items-center gap-3 sm:flex">
               <Link
                 href="/login"
@@ -183,6 +200,11 @@ export default function Navbar() {
           </div>
         </div>
       )}
+      <PasswordChangeModal
+        isOpen={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+      />
     </header>
   );
 }
+

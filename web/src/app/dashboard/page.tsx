@@ -206,48 +206,117 @@ function AuditTrail({ logs }: { logs: AuditLog[] }) {
   );
 }
 
-function UserRoster({ users }: { users: AdminUser[] }) {
+function UserRoster({
+  users,
+  onActionSuccess,
+}: {
+  users: AdminUser[];
+  onActionSuccess: () => void;
+}) {
+  const handleToggleStatus = async (account: AdminUser) => {
+    try {
+      await api.admin.toggleUserStatus(account.id, !account.is_active);
+      toast.success(`User ${account.email} ${account.is_active ? 'deactivated' : 'activated'}`);
+      onActionSuccess();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update user status');
+    }
+  };
+
+  const handleToggleRole = async (account: AdminUser) => {
+    const nextRole = account.role === 'admin' ? 'user' : 'admin';
+    try {
+      await api.admin.updateUserRole(account.id, nextRole);
+      toast.success(`User ${account.email} role updated to ${nextRole}`);
+      onActionSuccess();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update user role');
+    }
+  };
+
+  const handleDelete = async (account: AdminUser) => {
+    if (!confirm(`Are you sure you want to permanently delete account ${account.email}?`)) {
+      return;
+    }
+    try {
+      await api.admin.deleteUser(account.id);
+      toast.success(`User ${account.email} deleted`);
+      onActionSuccess();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete user');
+    }
+  };
+
   return (
     <section className={`${CARD} overflow-hidden`}>
-      <div className="border-b border-border-default p-5">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted">Accounts</h2>
-        <p className="mt-0.5 text-xs text-muted">{users.length} registered</p>
+      <div className="border-b border-border-default p-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-muted">Accounts & RBAC</h2>
+          <p className="mt-0.5 text-xs text-muted">{users.length} registered</p>
+        </div>
       </div>
-      <div className="tl-scroll max-h-[360px] overflow-y-auto">
+      <div className="tl-scroll max-h-[420px] overflow-y-auto">
         <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 bg-surface-muted text-[11px] uppercase tracking-wider text-muted">
+          <thead className="sticky top-0 bg-surface-muted text-[11px] uppercase tracking-wider text-muted z-10">
             <tr>
               <th className="px-5 py-3 font-semibold">Email</th>
               <th className="px-3 py-3 font-semibold">Role</th>
-              <th className="px-5 py-3 text-right font-semibold">Joined</th>
+              <th className="px-3 py-3 font-semibold">Status</th>
+              <th className="px-5 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {users.map((account) => (
-              <tr key={account.id} className="border-t border-border-default">
+              <tr key={account.id} className="border-t border-border-default transition-colors hover:bg-surface-muted/30">
                 <td className="px-5 py-2.5">
-                  <span className="flex items-center gap-2">
-                    <span className="truncate text-xs text-foreground">{account.email}</span>
-                    {!account.is_active && (
-                      <span className="shrink-0 rounded-md border border-risk-critical/25 bg-risk-critical/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-risk-critical">
-                        Disabled
-                      </span>
-                    )}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className="truncate text-xs font-medium text-foreground">{account.email}</span>
+                    <span className="text-[10px] text-muted">Joined {formatDateTime(account.created_at)}</span>
+                  </div>
                 </td>
                 <td className="px-3 py-2.5">
-                  <span
-                    className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  <button
+                    type="button"
+                    onClick={() => handleToggleRole(account)}
+                    title="Click to toggle between user and admin"
+                    className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-opacity hover:opacity-80 ${
                       account.role === 'admin'
                         ? 'border-brand/25 bg-brand-soft text-brand'
                         : 'border-border-default bg-surface-muted text-muted'
                     }`}
                   >
-                    {account.role}
+                    {account.role} ⇋
+                  </button>
+                </td>
+                <td className="px-3 py-2.5">
+                  <span
+                    className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase ${
+                      account.is_active
+                        ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
+                        : 'border-risk-critical/25 bg-risk-critical/10 text-risk-critical'
+                    }`}
+                  >
+                    {account.is_active ? 'Active' : 'Disabled'}
                   </span>
                 </td>
-                <td className="px-5 py-2.5 text-right text-xs text-muted">
-                  {formatDateTime(account.created_at)}
+                <td className="px-5 py-2.5 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleStatus(account)}
+                      className="rounded-lg border border-border-default px-2 py-1 text-[11px] font-medium text-muted hover:bg-surface-muted hover:text-foreground transition-colors"
+                    >
+                      {account.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(account)}
+                      className="rounded-lg border border-risk-critical/30 px-2 py-1 text-[11px] font-medium text-risk-critical hover:bg-risk-critical/10 transition-colors"
+                      title="Delete account"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -257,6 +326,7 @@ function UserRoster({ users }: { users: AdminUser[] }) {
     </section>
   );
 }
+
 
 /* ------------------------------------------------------------------- page */
 
@@ -288,6 +358,11 @@ function SocDashboard() {
     queryFn: () => api.admin.analyses({ limit: 100 }),
   });
 
+  const { data: metrics } = useQuery({
+    queryKey: ['admin', 'metrics'],
+    queryFn: () => api.admin.metrics(),
+  });
+
   const analyses = analysesData?.items || [];
 
   const handleRefresh = async () => {
@@ -298,12 +373,14 @@ function SocDashboard() {
         queryClient.invalidateQueries({ queryKey: ['admin', 'audit-logs'] }),
         queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
         queryClient.invalidateQueries({ queryKey: ['admin', 'analyses'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'metrics'] }),
       ]);
       toast.success('Dashboard refreshed');
     } catch (err) {
       toast.error('Failed to refresh dashboard');
     }
   };
+
 
   const handleExportAudit = async () => {
     try {
@@ -419,11 +496,46 @@ function SocDashboard() {
 
           <CampaignTable campaigns={campaigns ?? []} />
 
+          {metrics && (
+            <section className={`${CARD} p-5`}>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-muted mb-3">
+                System Telemetry & Engine Health
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="rounded-xl bg-surface-muted/60 p-3">
+                  <span className="text-[11px] text-muted block">Avg Latency</span>
+                  <span className="text-lg font-bold tabular-nums text-foreground">
+                    {metrics.performance?.avg_latency_ms ?? 0} ms
+                  </span>
+                </div>
+                <div className="rounded-xl bg-surface-muted/60 p-3">
+                  <span className="text-[11px] text-muted block">Threat Ratio</span>
+                  <span className="text-lg font-bold tabular-nums text-risk-high">
+                    {metrics.performance?.threat_ratio_pct ?? 0}%
+                  </span>
+                </div>
+                <div className="rounded-xl bg-surface-muted/60 p-3">
+                  <span className="text-[11px] text-muted block">Active Accounts</span>
+                  <span className="text-lg font-bold tabular-nums text-foreground">
+                    {metrics.users?.active ?? 0} / {metrics.users?.total ?? 0}
+                  </span>
+                </div>
+                <div className="rounded-xl bg-surface-muted/60 p-3">
+                  <span className="text-[11px] text-muted block">ML Classification</span>
+                  <span className="text-xs font-semibold text-brand block mt-1">
+                    {metrics.ml_engine?.mode ?? 'Active'}
+                  </span>
+                </div>
+              </div>
+            </section>
+          )}
+
           <div className="grid gap-6 lg:grid-cols-2">
             <AuditTrail logs={logs ?? []} />
-            <UserRoster users={users ?? []} />
+            <UserRoster users={users ?? []} onActionSuccess={handleRefresh} />
           </div>
         </div>
+
       )}
     </div>
   );

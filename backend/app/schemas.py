@@ -44,6 +44,39 @@ class UserOut(BaseModel):
     is_active: bool
 
 
+class PasswordChangeIn(BaseModel):
+    old_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not (re.search(r"[A-Z]", v) and re.search(r"[a-z]", v) and re.search(r"\d", v)):
+            raise ValueError("Password must contain uppercase, lowercase and digits")
+        return v
+
+
+class AdminUserUpdateIn(BaseModel):
+    is_active: Optional[bool] = None
+    role: Optional[str] = Field(default=None, pattern="^(user|admin)$")
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    title: str
+    message: str
+    notification_type: str
+    is_read: bool
+    created_at: object
+
+
+class NotificationCountOut(BaseModel):
+    unread_count: int
+
+
+
 def _sanitize_text(v: str) -> str:
     """Strip control characters (except newlines/tabs) — basic injection hygiene."""
     return "".join(ch for ch in v if ch in ("\n", "\t") or ord(ch) >= 32)

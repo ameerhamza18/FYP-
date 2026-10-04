@@ -20,11 +20,34 @@ ANALYZE_PATHS = ("/api/analyze",)
 
 
 class SlidingWindowRateLimiter:
-    def __init__(self) -> None:
+    def __init__(self, redis_url: str = "") -> None:
         self._hits: Dict[Tuple[str, str], Deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
+        self._redis = None
+        if redis_url:
+            try:
+                import redis
+                self._redis = redis.Redis.from_url(redis_url, socket_timeout=1.0)
+                self._redis.ping()
+            except Exception:
+                self._redis = None
 
     def allow(self, key: Tuple[str, str], limit: int, window: float = 60.0) -> bool:
+        if self._redis is not None:
+            try:
+                redis_key = f"rl:{key[0]}:{key[1]}"
+                now = time.time()
+                pipe = self._redis.pipeline()
+                pipe.zremrangebyscore(redis_key, 0, now - window)
+                pipe.zcard(redis_key)
+                pipe.zadd(redis_key, {f"{now}:{time.perf_counter()}": now})
+                pipe.expire(redis_key, int(window) + 5)
+                res = pipe.execute()
+                count = res[1]
+                return count < limit
+            except Exception:
+                pass  # Graceful fallback to thread-safe memory deque
+
         now = time.monotonic()
         with self._lock:
             dq = self._hits[key]
@@ -42,8 +65,9 @@ _limiter_singleton = None
 def get_limiter() -> SlidingWindowRateLimiter:
     global _limiter_singleton
     if _limiter_singleton is None:
-        _limiter_singleton = SlidingWindowRateLimiter()
+        _limiter_singleton = SlidingWindowRateLimiter(settings.redis_url)
     return _limiter_singleton
+
 
 
 import ipaddress

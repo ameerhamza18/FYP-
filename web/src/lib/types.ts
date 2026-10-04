@@ -145,3 +145,62 @@ export interface HealthResponse {
   app?: string;
   environment?: string;
 }
+
+export interface Notification {
+  id: number;
+  user_id: number;
+  title: string;
+  message: string;
+  notification_type: 'alert' | 'campaign' | 'system';
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationCount {
+  unread_count: number;
+}
+
+export interface AdminMetrics {
+  status: string;
+  timestamp: string;
+  database: { connection: string; total_analyses: number };
+  users: { total: number; active: number };
+  performance: {
+    avg_latency_ms: number;
+    high_critical_count: number;
+    threat_ratio_pct: number;
+  };
+  ml_engine: {
+    model_loaded: boolean;
+    mode: string;
+  };
+}
+
+export interface IncidentReport {
+  report_id: string;
+  platform: string;
+  generated_at: string;
+  investigator_account: string;
+  integrity_hash: string;
+  threat_assessment: {
+    risk_score: number;
+    risk_level: string;
+    threat_type: string;
+    input_type: string;
+    campaign_correlated: boolean;
+    campaign_signature?: string | null;
+  };
+  forensic_breakdown: {
+    ml_probability?: number | null;
+    rule_engine_score?: number | null;
+    intel_score?: number | null;
+    url_score?: number | null;
+    indicators: Indicator[];
+    social_engineering_tactics: SETechnique[];
+  };
+  verdict_summary: {
+    technical_explanation: string;
+    recommended_actions: string;
+  };
+  disclaimer: string;
+}

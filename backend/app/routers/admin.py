@@ -4,15 +4,23 @@ import datetime as dt
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
-from app.models import Analysis, Campaign, SEFinding, User
-from app.schemas import AdminAnalysisOut, AdminAnalysisPage, AdminStatsOut, CampaignOut
+from app.models import Analysis, AuditLog, Campaign, Notification, SEFinding, User
+from app.schemas import (
+    AdminAnalysisOut,
+    AdminAnalysisPage,
+    AdminStatsOut,
+    AdminUserUpdateIn,
+    CampaignOut,
+)
+from app.security.audit import audit
 from app.security.auth import require_admin
+
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -26,12 +34,14 @@ def stats(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     high_risk = db.query(func.count(Analysis.id)).filter(
         Analysis.risk_level.in_(["HIGH", "CRITICAL"])).scalar() or 0
 
-    def count_type(threat: str) -> int:
-        return db.query(func.count(Analysis.id)).filter(
-            Analysis.threat_type == threat).scalar() or 0
+    # Single aggregated query for all threat types instead of 5 separate scans
+    type_counts = dict(
+        db.query(Analysis.threat_type, func.count(Analysis.id))
+        .group_by(Analysis.threat_type)
+        .all()
+    )
 
     # 14-day threat trend
-    trend = []
     since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=13)
     rows = (
         db.query(Analysis.risk_level, func.date(Analysis.created_at), func.count(Analysis.id))
@@ -59,16 +69,17 @@ def stats(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     return AdminStatsOut(
         total_analyses=total,
         high_risk=high_risk,
-        phishing=count_type("Phishing"),
-        job_scams=count_type("Job Scam"),
-        financial_fraud=count_type("Financial Fraud"),
-        investment_scams=count_type("Investment Scam"),
-        prize_scams=count_type("Prize Scam"),
+        phishing=type_counts.get("Phishing", 0),
+        job_scams=type_counts.get("Job Scam", 0),
+        financial_fraud=type_counts.get("Financial Fraud", 0),
+        investment_scams=type_counts.get("Investment Scam", 0),
+        prize_scams=type_counts.get("Prize Scam", 0),
         threat_trend=trend,
         top_techniques=[{"technique": t, "count": c} for t, c in top_techniques],
         active_campaigns=db.query(func.count(Campaign.id)).filter(
             Campaign.hits >= 3).scalar() or 0,
     )
+
 
 
 @router.get("/analyses", response_model=AdminAnalysisPage)
@@ -158,6 +169,117 @@ def users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
          "is_active": u.is_active, "created_at": str(u.created_at)}
         for u in db.query(User).order_by(User.id).all()
     ]
+
+
+@router.patch("/users/{user_id}/status")
+def toggle_user_status(
+    user_id: int,
+    payload: AdminUserUpdateIn,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin),
+):
+    """Enable or disable user account access (OWASP API5 RBAC protected)."""
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if target.id == admin_user.id and payload.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Administrators cannot deactivate their own active session",
+        )
+
+    if payload.is_active is not None:
+        target.is_active = payload.is_active
+
+    db.commit()
+    audit(db, "ADMIN_USER_STATUS_CHANGE", user_id=admin_user.id,
+          resource=f"user:{target.id}:{target.email}",
+          meta={"new_status": target.is_active})
+    return {"status": "success", "user_id": target.id, "is_active": target.is_active}
+
+
+@router.patch("/users/{user_id}/role")
+def update_user_role(
+    user_id: int,
+    payload: AdminUserUpdateIn,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin),
+):
+    """Change user authorization role (admin or user)."""
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if target.id == admin_user.id and payload.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Administrators cannot demote their own account role",
+        )
+
+    if payload.role:
+        target.role = payload.role
+
+    db.commit()
+    audit(db, "ADMIN_USER_ROLE_CHANGE", user_id=admin_user.id,
+          resource=f"user:{target.id}:{target.email}",
+          meta={"new_role": target.role})
+    return {"status": "success", "user_id": target.id, "role": target.role}
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_200_OK)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin),
+):
+    """Permanently delete user account and associated records."""
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if target.id == admin_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Administrators cannot delete their own account via the admin panel",
+        )
+
+    db.query(Notification).filter(Notification.user_id == target.id).delete()
+    db.query(Analysis).filter(Analysis.user_id == target.id).delete()
+    db.delete(target)
+    db.commit()
+    audit(db, "ADMIN_USER_DELETED", user_id=admin_user.id,
+          resource=f"user:{target.id}:{target.email}")
+    return {"status": "success", "message": f"User {target.email} removed"}
+
+
+@router.get("/metrics")
+def operational_metrics(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """System and operational metrics for DevOps monitoring."""
+    from services.nlp.classifier import get_classifier
+    classifier = get_classifier()
+
+    total_analyses = db.query(func.count(Analysis.id)).scalar() or 0
+    total_users = db.query(func.count(User.id)).scalar() or 0
+    active_users = db.query(func.count(User.id)).filter(User.is_active.is_(True)).scalar() or 0
+    high_critical = db.query(func.count(Analysis.id)).filter(
+        Analysis.risk_level.in_(["HIGH", "CRITICAL"])
+    ).scalar() or 0
+    avg_latency = db.query(func.avg(Analysis.latency_ms)).scalar() or 0.0
+
+    return {
+        "status": "healthy",
+        "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "database": {"connection": "active", "total_analyses": total_analyses},
+        "users": {"total": total_users, "active": active_users},
+        "performance": {
+            "avg_latency_ms": round(float(avg_latency), 2),
+            "high_critical_count": high_critical,
+            "threat_ratio_pct": round((high_critical / total_analyses * 100), 2) if total_analyses else 0,
+        },
+        "ml_engine": {
+            "model_loaded": classifier.available,
+            "mode": "hybrid-ml-rules" if classifier.available else "rules-intel-fallback",
+        },
+    }
+
 
 
 @router.get("/stream/threats")
