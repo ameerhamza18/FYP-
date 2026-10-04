@@ -43,23 +43,51 @@ class ProtectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: TrustLayerColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: accent.withOpacity(0.45), width: 1.2),
+        border: Border.all(color: accent.withOpacity(0.35), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(_protected ? Icons.verified_user : Icons.gpp_maybe, color: accent, size: 26),
-              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: accent.withOpacity(0.4)),
+                ),
+                child: Icon(_protected ? Icons.verified_user_rounded : Icons.gpp_maybe_rounded, color: accent, size: 20),
+              ),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  _protected ? 'Automatic protection ON' : 'Protection needs setup',
-                  style: GoogleFonts.inter(
-                    color: TrustLayerColors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _protected ? 'AUTONOMOUS SENSOR GUARD: ACTIVE' : 'SENSOR GUARDS STANDBY',
+                      style: GoogleFonts.inter(
+                        color: TrustLayerColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13.5,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _protected
+                          ? 'Real-time intercept stream enabled'
+                          : 'Action needed to arm hardware filters',
+                      style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 11),
+                    ),
+                  ],
                 ),
               ),
               if (busy)
@@ -70,57 +98,74 @@ class ProtectionCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            _protected
-                ? 'TrustLayer checks SMS and chat messages as they arrive, before you open them.'
-                : 'Two taps and TrustLayer will check scam messages for you automatically.',
-            style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 13),
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           _requirement(
             done: status.smsPermission,
-            label: 'Read incoming SMS',
-            detail: 'Lets TrustLayer warn you before you open a scam text.',
-            actionLabel: 'Allow',
+            code: 'SMS-01',
+            label: 'Read incoming SMS stream',
+            detail: 'Intercepts OTP phishing and smishing payloads.',
+            actionLabel: 'Authorize',
             onTap: onEnableSms,
           ),
           _requirement(
             done: status.notificationAccess,
-            label: 'Message & chat monitoring',
-            detail: 'Covers WhatsApp, Telegram, Instagram and SMS apps.',
-            actionLabel: 'Open settings',
+            code: 'NOTIF-02',
+            label: 'Chat & App Notification Monitor',
+            detail: 'Protects WhatsApp, Telegram, Signal and Instagram.',
+            actionLabel: 'Enable Service',
             onTap: onEnableNotificationAccess,
           ),
           _requirement(
             done: status.notificationsEnabled,
-            label: 'Show warnings as notifications',
-            detail: 'Needed so alerts reach you when the app is closed.',
-            actionLabel: 'Allow',
+            code: 'ALERT-03',
+            label: 'High-Priority Threat Alerts',
+            detail: 'Delivers immediate heads-up warnings before app opens.',
+            actionLabel: 'Authorize',
             onTap: onEnableNotifications,
           ),
           if (status.pendingInterceptions > 0) ...[
-            const SizedBox(height: 4),
-            Text(
-              '${status.pendingInterceptions} intercepted message(s) waiting to be analyzed.',
-              style: TextStyle(color: TrustLayerColors.high, fontSize: 12),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: TrustLayerColors.high.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: TrustLayerColors.high.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.sync_problem_rounded, color: TrustLayerColors.high, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${status.pendingInterceptions} intercepted payload(s) queued for scan.',
+                    style: const TextStyle(color: TrustLayerColors.high, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ),
           ],
-          const Divider(height: 26, color: Colors.white12),
+          const Divider(height: 24, color: TrustLayerColors.surfaceBorder),
           _quietModeSwitch(),
+          const SizedBox(height: 6),
           Row(
             children: [
               TextButton.icon(
                 onPressed: onTestAlert,
-                icon: const Icon(Icons.notifications_active_outlined, size: 18),
-                label: const Text('Send test alert'),
-                style: TextButton.styleFrom(foregroundColor: TrustLayerColors.primary),
+                icon: const Icon(Icons.bolt_rounded, size: 16),
+                label: const Text('Simulate Test Threat'),
+                style: TextButton.styleFrom(
+                  foregroundColor: TrustLayerColors.primary,
+                  textStyle: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
               ),
               const Spacer(),
               TextButton(
                 onPressed: onOpenBatterySettings,
-                style: TextButton.styleFrom(foregroundColor: TrustLayerColors.textSecondary),
-                child: const Text('Battery settings', style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  foregroundColor: TrustLayerColors.textSecondary,
+                  textStyle: GoogleFonts.jetBrainsMono(fontSize: 10.5),
+                ),
+                child: const Text('Battery Exemption →'),
               ),
             ],
           ),
@@ -133,19 +178,21 @@ class ProtectionCard extends StatelessWidget {
     return SwitchListTile.adaptive(
       contentPadding: EdgeInsets.zero,
       dense: true,
+      activeColor: TrustLayerColors.primary,
       value: status.quietMode,
       onChanged: onQuietModeChanged,
-      title: Text('Hide flagged messages',
-          style: TextStyle(color: TrustLayerColors.textPrimary, fontSize: 14)),
+      title: Text('Suppress Flagged Alerts in OS Shade',
+          style: GoogleFonts.inter(color: TrustLayerColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
       subtitle: Text(
-        'Withdraws the original chat notification so a scam cannot be tapped out of habit.',
-        style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 12),
+        'Neutralizes native push notification so malicious links cannot be opened accidentally.',
+        style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 11),
       ),
     );
   }
 
   Widget _requirement({
     required bool done,
+    required String code,
     required String label,
     required String detail,
     required String actionLabel,
@@ -156,29 +203,73 @@ class ProtectionCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(done ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: done ? TrustLayerColors.low : TrustLayerColors.textSecondary, size: 20),
+          Container(
+            margin: const EdgeInsets.only(top: 2),
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: done ? TrustLayerColors.low.withOpacity(0.2) : Colors.transparent,
+              border: Border.all(
+                color: done ? TrustLayerColors.low : TrustLayerColors.surfaceBorder,
+                width: 1.5,
+              ),
+            ),
+            child: done
+                ? const Center(child: Icon(Icons.check, size: 11, color: TrustLayerColors.low))
+                : null,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                      color: TrustLayerColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    )),
+                Row(
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.inter(
+                        color: TrustLayerColors.textPrimary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '[$code]',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: TrustLayerColors.textMuted,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 1),
                 Text(detail,
-                    style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 12)),
+                    style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 11)),
               ],
             ),
           ),
           if (!done)
-            TextButton(
-              onPressed: onTap,
-              style: TextButton.styleFrom(foregroundColor: TrustLayerColors.primary),
-              child: Text(actionLabel, style: const TextStyle(fontSize: 12)),
+            InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: TrustLayerColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: TrustLayerColors.primary.withOpacity(0.4)),
+                ),
+                child: Text(
+                  actionLabel,
+                  style: GoogleFonts.jetBrainsMono(
+                    color: TrustLayerColors.primary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ),
         ],
       ),
