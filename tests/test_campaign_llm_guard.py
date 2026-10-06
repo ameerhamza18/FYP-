@@ -68,3 +68,52 @@ def test_llm_output_validation_rejects_secrets():
 
 def test_llm_output_truncated():
     assert len(validate_llm_output("x" * 9999)) == 4000
+
+
+def test_gemini_explainer_template_fallback_when_no_key():
+    from services.llm.explainer import generate_explanation, template_explanation
+    verdict = {"risk_score": 85, "risk_level": "HIGH", "threat_type": "Phishing", "recommendation": "Do not click."}
+    indicators = [{"title": "Urgency cue", "severity": "HIGH", "detail": "Urgent action requested"}]
+    explanation, source = generate_explanation(verdict, indicators, [], "Urgent: verify your account now")
+    assert source == "template"
+    assert "TrustLayer rated this message HIGH risk" in explanation
+
+
+def test_gemini_explainer_mocked_success(monkeypatch):
+    import httpx
+    from app.config import get_settings
+    from services.llm.explainer import generate_explanation
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gemini_api_key", "test-gemini-key")
+
+    mock_gemini_response = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "text": "Summary: High phishing danger.\nWhy this is risky: Suspicious links.\nWhat you should do: Delete."
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    class MockResponse:
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return mock_gemini_response
+
+    def mock_post(*args, **kwargs):
+        return MockResponse()
+
+    monkeypatch.setattr(httpx.Client, "post", mock_post)
+
+    verdict = {"risk_score": 90, "risk_level": "CRITICAL", "threat_type": "Phishing", "recommendation": "Block sender."}
+    explanation, source = generate_explanation(verdict, [], [], "Click here immediately")
+    assert source == "llm"
+    assert "High phishing danger" in explanation
+

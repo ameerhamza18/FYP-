@@ -78,7 +78,12 @@ class Settings:
     # --- CORS ---
     cors_origins: list = field(
         default_factory=lambda: [
-            o.strip() for o in _env("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080").split(",") if o.strip()
+            o.strip()
+            for o in _env(
+                "CORS_ORIGINS",
+                "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080,http://localhost:3001,http://127.0.0.1:3001",
+            ).split(",")
+            if o.strip()
         ]
     )
 
@@ -98,15 +103,28 @@ class Settings:
         default_factory=lambda: _env_int("MAX_UPLOAD_SIZE_MB", 8)
     )
 
-    # --- LLM ---
+    # --- LLM (Google Gemini) ---
+    gemini_api_key: str = field(
+        default_factory=lambda: _env("GEMINI_API_KEY") or _env("GOOGLE_API_KEY", "")
+    )
+    gemini_base_url: str = field(
+        default_factory=lambda: _env(
+            "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
+        )
+    )
+    gemini_model: str = field(
+        default_factory=lambda: _env("GEMINI_MODEL", "gemini-1.5-flash")
+    )
+    llm_timeout_seconds: int = field(
+        default_factory=lambda: _env_int("LLM_TIMEOUT_SECONDS", 20)
+    )
+
+    # Backwards-compatibility aliases (deprecated)
     openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY", ""))
     openai_base_url: str = field(
         default_factory=lambda: _env("OPENAI_BASE_URL", "https://api.openai.com/v1")
     )
     openai_model: str = field(default_factory=lambda: _env("OPENAI_MODEL", "gpt-4o-mini"))
-    llm_timeout_seconds: int = field(
-        default_factory=lambda: _env_int("LLM_TIMEOUT_SECONDS", 20)
-    )
 
     # --- Admin bootstrap ---
     admin_email: str = field(

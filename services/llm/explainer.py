@@ -83,56 +83,140 @@ def template_explanation(verdict: Dict, indicators: List[Dict],
 def generate_explanation(verdict: Dict, indicators: List[Dict],
                          se_findings: List[Dict], snippet: str) -> tuple:
     """Return (explanation_text, source) where source is 'llm' or 'template'."""
-    if not settings.openai_api_key:
-        return template_explanation(verdict, indicators, se_findings, snippet), "template"
+    # Priority: Google Gemini
+    if settings.gemini_api_key:
+        try:
+            with httpx.Client(timeout=settings.llm_timeout_seconds) as client:
+                resp = client.post(
+                    f"{settings.gemini_base_url.rstrip('/')}/models/{settings.gemini_model}:generateContent",
+                    params={"key": settings.gemini_api_key},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": settings.gemini_api_key,
+                    },
+                    json={
+                        "system_instruction": {
+                            "parts": [{"text": SYSTEM_PROMPT}]
+                        },
+                        "contents": [
+                            {
+                                "role": "user",
+                                "parts": [{"text": build_user_prompt(verdict, indicators, se_findings, snippet)}],
+                            }
+                        ],
+                        "generationConfig": {
+                            "temperature": 0.2,
+                            "maxOutputTokens": 450,
+                        },
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                candidates = data.get("candidates") or []
+                if not candidates:
+                    raise ValueError(f"Gemini returned no candidates: {data}")
+                parts = candidates[0].get("content", {}).get("parts") or []
+                if not parts or "text" not in parts[0]:
+                    raise ValueError(f"Gemini candidate has no text part: {candidates[0]}")
+                content = parts[0]["text"]
+                return validate_llm_output(content), "llm"
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully, never fail the analysis
+            logger.warning("Gemini LLM explanation failed (%s) — using template fallback", exc)
+            return template_explanation(verdict, indicators, se_findings, snippet), "template"
 
-    try:
-        with httpx.Client(timeout=settings.llm_timeout_seconds) as client:
-            resp = client.post(
-                f"{settings.openai_base_url.rstrip('/')}/chat/completions",
-                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                json={
-                    "model": settings.openai_model,
-                    "temperature": 0.2,
-                    "max_tokens": 400,
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": build_user_prompt(verdict, indicators, se_findings, snippet)},
-                    ],
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-            return validate_llm_output(content), "llm"
-    except Exception as exc:  # noqa: BLE001 — degrade gracefully, never fail the analysis
-        logger.warning("LLM explanation failed (%s) — using template fallback", exc)
-        return template_explanation(verdict, indicators, se_findings, snippet), "template"
+    # Legacy OpenAI fallback if configured
+    if settings.openai_api_key:
+        try:
+            with httpx.Client(timeout=settings.llm_timeout_seconds) as client:
+                resp = client.post(
+                    f"{settings.openai_base_url.rstrip('/')}/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                    json={
+                        "model": settings.openai_model,
+                        "temperature": 0.2,
+                        "max_tokens": 400,
+                        "messages": [
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": build_user_prompt(verdict, indicators, se_findings, snippet)},
+                        ],
+                    },
+                )
+                resp.raise_for_status()
+                content = resp.json()["choices"][0]["message"]["content"]
+                return validate_llm_output(content), "llm"
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully, never fail the analysis
+            logger.warning("OpenAI LLM explanation failed (%s) — using template fallback", exc)
+            return template_explanation(verdict, indicators, se_findings, snippet), "template"
+
+    return template_explanation(verdict, indicators, se_findings, snippet), "template"
 
 
 async def async_generate_explanation(verdict: Dict, indicators: List[Dict],
                                      se_findings: List[Dict], snippet: str) -> tuple:
     """Async variant using httpx.AsyncClient to avoid blocking the event loop."""
-    if not settings.openai_api_key:
-        return template_explanation(verdict, indicators, se_findings, snippet), "template"
+    # Priority: Google Gemini
+    if settings.gemini_api_key:
+        try:
+            async with httpx.AsyncClient(timeout=settings.llm_timeout_seconds) as client:
+                resp = await client.post(
+                    f"{settings.gemini_base_url.rstrip('/')}/models/{settings.gemini_model}:generateContent",
+                    params={"key": settings.gemini_api_key},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": settings.gemini_api_key,
+                    },
+                    json={
+                        "system_instruction": {
+                            "parts": [{"text": SYSTEM_PROMPT}]
+                        },
+                        "contents": [
+                            {
+                                "role": "user",
+                                "parts": [{"text": build_user_prompt(verdict, indicators, se_findings, snippet)}],
+                            }
+                        ],
+                        "generationConfig": {
+                            "temperature": 0.2,
+                            "maxOutputTokens": 450,
+                        },
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                candidates = data.get("candidates") or []
+                if not candidates:
+                    raise ValueError(f"Gemini returned no candidates: {data}")
+                parts = candidates[0].get("content", {}).get("parts") or []
+                if not parts or "text" not in parts[0]:
+                    raise ValueError(f"Gemini candidate has no text part: {candidates[0]}")
+                content = parts[0]["text"]
+                return validate_llm_output(content), "llm"
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Async Gemini LLM explanation failed (%s) — using template fallback", exc)
+            return template_explanation(verdict, indicators, se_findings, snippet), "template"
 
-    try:
-        async with httpx.AsyncClient(timeout=settings.llm_timeout_seconds) as client:
-            resp = await client.post(
-                f"{settings.openai_base_url.rstrip('/')}/chat/completions",
-                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                json={
-                    "model": settings.openai_model,
-                    "temperature": 0.2,
-                    "max_tokens": 400,
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": build_user_prompt(verdict, indicators, se_findings, snippet)},
-                    ],
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-            return validate_llm_output(content), "llm"
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Async LLM explanation failed (%s) — using template fallback", exc)
-        return template_explanation(verdict, indicators, se_findings, snippet), "template"
+    # Legacy OpenAI fallback if configured
+    if settings.openai_api_key:
+        try:
+            async with httpx.AsyncClient(timeout=settings.llm_timeout_seconds) as client:
+                resp = await client.post(
+                    f"{settings.openai_base_url.rstrip('/')}/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                    json={
+                        "model": settings.openai_model,
+                        "temperature": 0.2,
+                        "max_tokens": 400,
+                        "messages": [
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": build_user_prompt(verdict, indicators, se_findings, snippet)},
+                        ],
+                    },
+                )
+                resp.raise_for_status()
+                content = resp.json()["choices"][0]["message"]["content"]
+                return validate_llm_output(content), "llm"
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Async OpenAI LLM explanation failed (%s) — using template fallback", exc)
+            return template_explanation(verdict, indicators, se_findings, snippet), "template"
+
+    return template_explanation(verdict, indicators, se_findings, snippet), "template"

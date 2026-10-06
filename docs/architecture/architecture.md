@@ -83,6 +83,6 @@ contract-validated before reaching the client. This guarantees:
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy, PyJWT, bcrypt
 - **ML:** scikit-learn (TF-IDF word+char n-grams → Logistic Regression)
 - **OCR:** Tesseract via pytesseract
-- **LLM:** any OpenAI-compatible endpoint (optional; template fallback offline)
+- **LLM:** Google Gemini API (optional; template fallback offline)
 - **DB:** SQLite (dev) → PostgreSQL (prod)
 - **Infra:** Docker Compose, Terraform (AWS), GitHub Actions CI

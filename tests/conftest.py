@@ -1,3 +1,4 @@
+
 """Pytest configuration: sys.path bootstrap, isolated test DB, HTTP client."""
 import os
 import sys
@@ -17,6 +18,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TMP}/test.db"
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["OPENAI_API_KEY"] = ""
+os.environ["GEMINI_API_KEY"] = ""
+os.environ["GOOGLE_API_KEY"] = ""
 os.environ["ADMIN_EMAIL"] = "admin@trustlayer.com"
 os.environ["ADMIN_PASSWORD"] = "Admin@12345"
 
