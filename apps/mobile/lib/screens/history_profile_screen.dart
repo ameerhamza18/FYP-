@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart';
 import '../models/analysis_result.dart';
@@ -48,9 +49,12 @@ class _HistoryProfileScreenState extends State<HistoryProfileScreen> {
   }
 
   Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
     final quiet = await ProtectionService.getQuietMode();
     if (mounted) {
       setState(() {
+        _realtimeAlerts = prefs.getBool('pref_realtime_alerts') ?? true;
+        _regionalProtection = prefs.getBool('pref_regional_protection') ?? true;
         _quietMode = quiet;
       });
     }
@@ -434,7 +438,9 @@ class _HistoryProfileScreenState extends State<HistoryProfileScreen> {
                 ),
                 value: _realtimeAlerts,
                 activeColor: TrustLayerColors.low,
-                onChanged: (val) {
+                onChanged: (val) async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('pref_realtime_alerts', val);
                   setState(() => _realtimeAlerts = val);
                 },
               ),
@@ -458,7 +464,9 @@ class _HistoryProfileScreenState extends State<HistoryProfileScreen> {
                 ),
                 value: _regionalProtection,
                 activeColor: TrustLayerColors.low,
-                onChanged: (val) {
+                onChanged: (val) async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('pref_regional_protection', val);
                   setState(() => _regionalProtection = val);
                 },
               ),

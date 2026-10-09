@@ -12,7 +12,6 @@
  */
 import { useState, useMemo, useCallback } from 'react';
 import Footer from '@/components/Footer';
-import Navbar from '@/components/Navbar';
 import ThreatFeed from '@/components/dashboard/ThreatFeed';
 import TrendChart from '@/components/dashboard/TrendChart';
 import TechniqueBars from '@/components/dashboard/TechniqueBars';
@@ -78,6 +77,39 @@ function WaveformCanvas() {
         />
       </svg>
     </div>
+  );
+}
+
+function WaveformPulse() {
+  return (
+    <svg width="80" height="20" viewBox="0 0 80 20" fill="none" stroke="#38bdf8" strokeWidth="1.5">
+      <path d="M0 10 H15 V5 H25 V15 H35 V10 H45 V5 H55 V15 H65 V10 H80" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function WaveformSine() {
+  return (
+    <svg width="80" height="20" viewBox="0 0 80 20" fill="none" stroke="#22c55e" strokeWidth="1.5">
+      <path d="M0 10 Q 10 0, 20 10 T 40 10 T 60 10 T 80 10" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function WaveformBars() {
+  return (
+    <svg width="80" height="20" viewBox="0 0 80 20" fill="none">
+      <rect x="0" y="10" width="4" height="10" fill="#f43f5e" />
+      <rect x="8" y="5" width="4" height="15" fill="#f43f5e" />
+      <rect x="16" y="12" width="4" height="8" fill="#f43f5e" />
+      <rect x="24" y="2" width="4" height="18" fill="#f43f5e" />
+      <rect x="32" y="8" width="4" height="12" fill="#f43f5e" />
+      <rect x="40" y="14" width="4" height="6" fill="#f43f5e" />
+      <rect x="48" y="7" width="4" height="13" fill="#f43f5e" />
+      <rect x="56" y="10" width="4" height="10" fill="#f43f5e" />
+      <rect x="64" y="4" width="4" height="16" fill="#f43f5e" />
+      <rect x="72" y="9" width="4" height="11" fill="#f43f5e" />
+    </svg>
   );
 }
 
@@ -328,6 +360,8 @@ function SocDashboard() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNode, setSelectedNode] = useState<VectorNode | null>(null);
+  const [showRadarPopup, setShowRadarPopup] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
     queryKey: ['admin', 'stats'],
@@ -546,12 +580,12 @@ function SocDashboard() {
               <SegmentedMeter label="Phishing" pct={70} color="ruby" />
               <SegmentedMeter label="Malware" pct={70} color="ruby" />
               <SegmentedMeter label="Brute Force" pct={66} color="amber" />
-              <SegmentedMeter label="Social Pressure" pct={65} color="cyan" />
+              <SegmentedMeter label="Brute Force" pct={65} color="amber" />
             </div>
             
             <div className="mt-2 rounded border border-sky-900/30 bg-sky-950/30 px-2 py-1 font-mono text-[9px] text-sky-400 flex items-center justify-between">
               <span>DIO3IETRIC DETAILS:</span>
-              <span className="font-bold">[Feed ID Scan Successful]</span>
+              <span className="font-bold">[Face ID Scan Successful]</span>
             </div>
           </div>
 
@@ -565,15 +599,24 @@ function SocDashboard() {
             <div className="grid grid-cols-2 gap-2 text-[10px] pt-1">
               <div>
                 <span className="text-slate-500 block">Threat Acq:</span>
-                <span className="text-slate-300">19.128.1.193</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-300">19.128.1.193</span>
+                  <WaveformPulse />
+                </div>
               </div>
               <div>
                 <span className="text-slate-500 block">Source:</span>
-                <span className="text-slate-300">84.17.20.211</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-300">84.17.20.211</span>
+                  <WaveformSine />
+                </div>
               </div>
               <div>
                 <span className="text-slate-500 block">Status:</span>
-                <span className="text-rose-400 font-bold">Active</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-rose-400 font-bold">Active</span>
+                  <WaveformBars />
+                </div>
               </div>
               <div>
                 <span className="text-slate-500 block">Decryption:</span>
@@ -600,82 +643,140 @@ function SocDashboard() {
           
           {/* Top Status Bar: Technique Meters | Decised Threat in Analysis */}
           <div className="tl-hud-glass rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-sky-400 font-bold">Technique Meters</span>
-              <span className="text-slate-600">|</span>
-              <span className="text-slate-300 font-semibold">Decised Threat in Analysis</span>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sky-400 font-bold">Technique Meters</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-slate-300 font-semibold">Decised Threat in Analysis</span>
+              </div>
+
+              <div className="flex flex-col gap-1 text-[11px]">
+                <div className="flex items-center gap-3">
+                  <span>Target: <strong className="text-rose-400">19.135.1.163</strong></span>
+                  <span className="text-slate-600">/</span>
+                  <span>Type: <strong className="text-rose-400">Phishing</strong></span>
+                  <span className="text-slate-600">/</span>
+                  <span>Source: <strong className="text-sky-300">04.17.20.211</strong></span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span>Target: <strong className="text-rose-400">19.135.1.163</strong></span>
+                  <span className="text-slate-600">/</span>
+                  <span>Type: <strong className="text-rose-400">Phishing</strong></span>
+                  <span className="text-slate-600">/</span>
+                  <span>Source: <strong className="text-sky-300">04.17.20.211</strong></span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3 text-[11px]">
-              <span>Target: <strong className="text-rose-400">19.135.1.163</strong></span>
-              <span className="text-slate-600">/</span>
-              <span>Type: <strong className="text-rose-400">Phishing</strong></span>
-              <span className="text-slate-600">/</span>
-              <span>Source: <strong className="text-sky-300">04.17.20.211</strong></span>
+            <div className="flex flex-wrap items-center gap-4">
+              <SegmentedMeter label="Phishing" pct={70} color="ruby" />
+              <SegmentedMeter label="Malware" pct={70} color="ruby" />
+              <SegmentedMeter label="Brute Force" pct={65} color="amber" />
             </div>
           </div>
 
           {/* MAIN 3D VECTOR NODES MAP (Three.js Isometric Canvas) */}
-          <div className="relative flex-1 min-h-[460px] rounded-xl overflow-hidden border border-sky-900/50 bg-[#02050f] shadow-2xl">
+          <div className={`relative flex-1 min-h-[460px] rounded-xl overflow-hidden border border-sky-900/50 bg-[#02050f] shadow-2xl transition-all ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''}`}>
             <VectorNodesMap3D
               selectedNode={selectedNode}
               onSelectNode={(node) => setSelectedNode(node)}
             />
-          </div>
 
-          {/* Bottom Campaign Metadata Console with Tactical Buttons */}
-          <div className="tl-hud-glass rounded-xl p-4 font-mono">
-            <div className="flex items-center justify-between border-b border-sky-900/40 pb-2 mb-3">
-              <span className="text-xs font-bold text-sky-400">Campaign Metadata</span>
-              <span className="text-[10px] text-slate-500">SYSTEM-WIDE THREAT VECTOR #23783</span>
+            {/* Top right fullscreen toggle */}
+            <button 
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="absolute top-4 right-4 p-1.5 rounded bg-sky-950/60 border border-sky-500/30 text-sky-400 hover:bg-sky-900/80 z-10 transition-colors"
+              title="Toggle Fullscreen"
+            >
+              {isFullscreen ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              )}
+            </button>
+
+            {/* Bottom Campaign Metadata Console with Tactical Buttons */}
+            <div className="absolute bottom-4 left-4 z-10 tl-hud-glass rounded-xl p-4 font-mono w-[calc(100%-2rem)] md:w-[600px] backdrop-blur-md bg-[#060b18]/80 border-sky-500/30">
+              <div className="flex items-center justify-between border-b border-sky-900/40 pb-2 mb-3">
+                <span className="text-xs font-bold text-sky-400">Campaign Metadata</span>
+                <span className="text-[10px] text-slate-500">SYSTEM-WIDE THREAT VECTOR #23783</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-4">
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Campaign:</span>
+                  <span className="text-rose-400 font-bold truncate block">{activeCampaign.signature.slice(0, 20)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Attribute:</span>
+                  <span className="text-slate-300">None</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">File Type / Lang:</span>
+                  <span className="text-sky-300">Urdu / OCR</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Source IPs:</span>
+                  <span className="text-slate-300">84.17.211</span>
+                </div>
+              </div>
+
+              {/* Tactical Buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-sky-950 pt-3">
+                <span className="text-[10px] text-slate-500">SYSTEM-WIDE ACTIONS</span>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={handleCampaignReport}
+                    className="rounded border border-sky-700/60 bg-sky-950/60 px-3 py-1.5 font-bold text-sky-300 hover:bg-sky-900/60 transition-all active:scale-95"
+                  >
+                    CAMPAIGN REPORT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleIsolateAssets}
+                    className="rounded border border-rose-800/70 bg-rose-950/60 px-3 py-1.5 font-bold text-rose-400 hover:bg-rose-900/60 transition-all active:scale-95"
+                  >
+                    ISOLATE ASSETS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAlertManagers}
+                    className="rounded border border-amber-700/60 bg-amber-950/60 px-3 py-1.5 font-bold text-amber-300 hover:bg-amber-900/60 transition-all active:scale-95"
+                  >
+                    ALERT MANAGERS
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-4">
-              <div>
-                <span className="text-[10px] text-slate-500 block">Campaign:</span>
-                <span className="text-rose-400 font-bold truncate block">{activeCampaign.signature.slice(0, 20)}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-500 block">Attribute:</span>
-                <span className="text-slate-300">None</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-500 block">File Type / Lang:</span>
-                <span className="text-sky-300">Urdu / OCR</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-500 block">Source IPs:</span>
-                <span className="text-slate-300">84.17.211</span>
-              </div>
-            </div>
+            {/* Floating 2D Star Topology Radar Popup */}
+            {showRadarPopup && (
+              <div className="absolute bottom-4 right-4 z-10 tl-hud-glass rounded-xl p-3 font-mono backdrop-blur-md bg-[#060b18]/80 border-sky-500/30 w-52">
+                <div className="flex items-center justify-between border-b border-sky-950 pb-1.5 mb-2">
+                  <span className="text-[10px] font-bold text-sky-300">Vector Nodes Map</span>
+                  <button onClick={() => setShowRadarPopup(false)} className="text-slate-500 hover:text-sky-400">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                <div className="relative h-24 w-full flex items-center justify-center rounded border border-sky-950/60 bg-slate-950/70">
+                  <svg className="h-full w-full" viewBox="0 0 160 100">
+                    <line x1="80" y1="50" x2="30" y2="30" stroke="#ef4444" strokeWidth="1" strokeDasharray="2 2" />
+                    <line x1="80" y1="50" x2="130" y2="25" stroke="#f59e0b" strokeWidth="1" strokeDasharray="2 2" />
+                    <line x1="80" y1="50" x2="135" y2="75" stroke="#38bdf8" strokeWidth="1" />
+                    <line x1="80" y1="50" x2="35" y2="75" stroke="#38bdf8" strokeWidth="1" />
 
-            {/* Tactical Buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-sky-950 pt-3">
-              <span className="text-[10px] text-slate-500">SYSTEM-WIDE ACTIONS</span>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={handleCampaignReport}
-                  className="rounded border border-sky-700/60 bg-sky-950/60 px-3 py-1.5 font-bold text-sky-300 hover:bg-sky-900/60 transition-all active:scale-95"
-                >
-                  CAMPAIGN REPORT
-                </button>
-                <button
-                  type="button"
-                  onClick={handleIsolateAssets}
-                  className="rounded border border-rose-800/70 bg-rose-950/60 px-3 py-1.5 font-bold text-rose-400 hover:bg-rose-900/60 transition-all active:scale-95"
-                >
-                  ISOLATE ASSETS
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAlertManagers}
-                  className="rounded border border-amber-700/60 bg-amber-950/60 px-3 py-1.5 font-bold text-amber-300 hover:bg-amber-900/60 transition-all active:scale-95"
-                >
-                  ALERT MANAGERS
-                </button>
+                    <circle cx="80" cy="50" r="12" fill="#082f49" stroke="#38bdf8" strokeWidth="1.5" />
+                    <circle cx="80" cy="50" r="3" fill="#38bdf8" />
+
+                    <circle cx="30" cy="30" r="4" fill="#ef4444" />
+                    <circle cx="130" cy="25" r="4" fill="#f59e0b" />
+                    <circle cx="135" cy="75" r="4" fill="#38bdf8" />
+                    <circle cx="35" cy="75" r="4" fill="#38bdf8" />
+                  </svg>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
         </div>
@@ -693,19 +794,31 @@ function SocDashboard() {
             {/* Radar SVG */}
             <div className="relative h-28 w-full flex items-center justify-center rounded border border-sky-950/60 bg-slate-950/70">
               <svg className="h-full w-full" viewBox="0 0 160 100">
-                {/* Central Hub */}
-                <circle cx="80" cy="50" r="14" fill="#082f49" stroke="#38bdf8" strokeWidth="1.5" />
-                <circle cx="80" cy="50" r="4" fill="#38bdf8" />
-                {/* Outer satellite nodes */}
-                <circle cx="30" cy="30" r="5" fill="#ef4444" />
-                <circle cx="130" cy="25" r="5" fill="#f59e0b" />
-                <circle cx="135" cy="75" r="5" fill="#38bdf8" />
-                <circle cx="35" cy="75" r="5" fill="#38bdf8" />
                 {/* Radial lines */}
                 <line x1="80" y1="50" x2="30" y2="30" stroke="#ef4444" strokeWidth="1" strokeDasharray="2 2" />
                 <line x1="80" y1="50" x2="130" y2="25" stroke="#f59e0b" strokeWidth="1" strokeDasharray="2 2" />
                 <line x1="80" y1="50" x2="135" y2="75" stroke="#38bdf8" strokeWidth="1" />
                 <line x1="80" y1="50" x2="35" y2="75" stroke="#38bdf8" strokeWidth="1" />
+
+                {/* Central Hub */}
+                <circle cx="80" cy="50" r="14" fill="#082f49" stroke="#38bdf8" strokeWidth="1.5" />
+                <circle cx="80" cy="50" r="4" fill="#38bdf8" />
+                <text x="80" y="32" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">Vector Nodes</text>
+
+                {/* Outer satellite nodes */}
+                <circle cx="30" cy="30" r="5" fill="#ef4444" />
+                <text x="30" y="20" fill="#ef4444" fontSize="5" fontFamily="monospace" textAnchor="middle">Metaorbid.T68</text>
+
+                <circle cx="130" cy="25" r="5" fill="#f59e0b" />
+                <text x="130" y="15" fill="#f59e0b" fontSize="5" fontFamily="monospace" textAnchor="middle">OG7h553/88</text>
+
+                <circle cx="135" cy="75" r="5" fill="#38bdf8" />
+                <text x="135" y="87" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">R8.172.88.89X</text>
+
+                <circle cx="35" cy="75" r="5" fill="#38bdf8" />
+                <text x="35" y="87" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">Vector Notse</text>
+                
+                <text x="80" y="70" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">Squcere</text>
               </svg>
               <span className="absolute bottom-1 right-2 font-mono text-[8px] text-slate-500">STAR-CORRELATION</span>
             </div>
@@ -730,13 +843,24 @@ function SocDashboard() {
               <RiskShield3D score={84} level="BULAND" />
               
               {/* Telemetry Readouts around shield */}
-              <div className="grid grid-cols-2 gap-1 font-mono text-[9px] text-slate-400 pt-1">
-                <div className="flex justify-between"><span>SPN:</span><span className="text-slate-200">104318/201</span></div>
-                <div className="flex justify-between"><span>DRAF:</span><span className="text-slate-200">0606</span></div>
-                <div className="flex justify-between"><span>CAOTA:</span><span className="text-slate-200">22004</span></div>
-                <div className="flex justify-between"><span>MODI:</span><span className="text-rose-400 font-bold">2246,590</span></div>
-                <div className="flex justify-between"><span>TURV:</span><span className="text-slate-200">7408</span></div>
-                <div className="flex justify-between"><span>TEMA:</span><span className="text-slate-200">1M80BCHS</span></div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[9px] text-slate-400 pt-1">
+                <div className="flex justify-between"><span>SPK:</span><span className="text-slate-200">10451M.201</span></div>
+                <div className="flex justify-between"><span>OG06:</span><span className="text-slate-200">—</span></div>
+                
+                <div className="flex justify-between"><span>CASIA:</span><span className="text-slate-200">23004</span></div>
+                <div className="flex justify-between"><span>KOON:</span><span className="text-rose-400 font-bold">224k.990</span></div>
+                
+                <div className="flex justify-between"><span>DFH:</span><span className="text-slate-200">—</span></div>
+                <div className="flex justify-between"><span>MODI:</span><span className="text-slate-200">—</span></div>
+                
+                <div className="flex justify-between"><span>ICDOECK8:</span><span className="text-slate-200">—</span></div>
+                <div className="flex justify-between"><span>7408:</span><span className="text-slate-200">—</span></div>
+                
+                <div className="flex justify-between"><span>DEOID:</span><span className="text-slate-200">—</span></div>
+                <div className="flex justify-between"><span>THB OBCKS:</span><span className="text-slate-200">—</span></div>
+                
+                <div className="flex justify-between"><span>TURB:</span><span className="text-slate-200">—</span></div>
+                <div className="flex justify-between"><span>T400:</span><span className="text-slate-200">330</span></div>
               </div>
             </div>
           </div>
@@ -817,7 +941,6 @@ function SocDashboard() {
 export default function DashboardPage() {
   return (
     <>
-      <Navbar />
       <main className="flex-1 bg-[#040711]">
         <RequireAuth adminOnly>
           <SocDashboard />

@@ -26,6 +26,19 @@ class ResultScreen extends StatefulWidget {
 
 class _ResultScreenState extends State<ResultScreen> {
   int _viewMode = 0; // 0 = Speedometer Gauge Screen, 1 = Threat Analysis Breakdown
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: 0);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   Color get _levelColor {
     switch (widget.result.riskLevel) {
@@ -77,9 +90,12 @@ class _ResultScreenState extends State<ResultScreen> {
           // Toggle between Gauge & Full Breakdown
           TextButton.icon(
             onPressed: () {
-              setState(() {
-                _viewMode = _viewMode == 0 ? 1 : 0;
-              });
+              final nextPage = _viewMode == 0 ? 1 : 0;
+              _pageController.animateToPage(
+                nextPage,
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeInOut,
+              );
             },
             icon: Icon(
               _viewMode == 0 ? Icons.analytics_outlined : Icons.speed_rounded,
@@ -99,11 +115,17 @@ class _ResultScreenState extends State<ResultScreen> {
         ],
       ),
       body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _viewMode == 0
-              ? _buildRiskResultScreen()
-              : _buildThreatAnalysisBreakdown(),
+        child: PageView(
+          controller: _pageController,
+          onPageChanged: (index) {
+            setState(() {
+              _viewMode = index;
+            });
+          },
+          children: [
+            _buildRiskResultScreen(),
+            _buildThreatAnalysisBreakdown(),
+          ],
         ),
       ),
     );
@@ -234,7 +256,11 @@ class _ResultScreenState extends State<ResultScreen> {
             height: 52,
             child: ElevatedButton(
               onPressed: () {
-                setState(() => _viewMode = 1);
+                _pageController.animateToPage(
+                  1,
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0C172B),
