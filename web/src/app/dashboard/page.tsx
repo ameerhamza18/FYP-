@@ -422,7 +422,7 @@ function SocDashboard() {
     if (!searchQuery) return analyses.slice(0, 4);
     const q = searchQuery.toLowerCase();
     return analyses.filter(a => 
-      (a.input_text && a.input_text.toLowerCase().includes(q)) ||
+      (a.content_snippet && a.content_snippet.toLowerCase().includes(q)) ||
       (a.risk_level && a.risk_level.toLowerCase().includes(q)) ||
       (a.input_type && a.input_type.toLowerCase().includes(q))
     ).slice(0, 4);
@@ -528,7 +528,7 @@ function SocDashboard() {
                     </span>
                   </div>
                   <div className="mt-0.5 truncate text-[10px] text-slate-500">
-                    {item.input_text?.slice(0, 42) || 'Encrypted telemetry stream'}
+                    {item.content_snippet?.slice(0, 42) || 'Encrypted telemetry stream'}
                   </div>
                 </div>
               ))}

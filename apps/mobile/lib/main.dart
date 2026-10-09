@@ -133,6 +133,9 @@ class _TrustLayerAppState extends State<TrustLayerApp> with WidgetsBindingObserv
   }
 }
 
+import 'screens/onboarding_screen.dart';
+import 'widgets/cyber_shield_3d.dart';
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -161,13 +164,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   /// Cold-start routing. A stored token is *verified*, never trusted: an expired
   /// JWT must land the user on sign-in, not on a home screen where every action
-  /// fails with 401 (the previous behaviour).
+  /// fails with 401. If no token, user enters the Onboarding Tour.
   Future<void> _route() async {
+    // Artificial 1-second delay so splash renders smoothly
+    await Future.delayed(const Duration(milliseconds: 1200));
     final token = await TokenStore.read();
     if (!mounted) return;
 
     if (token == null) {
-      _go(const LoginScreen());
+      _go(const OnboardingScreen());
       return;
     }
 
@@ -178,8 +183,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       await TokenStore.clear();
       _go(const LoginScreen(sessionExpired: true));
     } catch (_) {
-      // Offline / server unreachable: keep the user signed in optimistically and
-      // let the home screen show the connection error with a Retry button.
+      // Offline / server unreachable: keep the user signed in optimistically
       _go(const HomeScreen());
     }
   }
@@ -202,57 +206,34 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             AnimatedBuilder(
               animation: _pulseController,
               builder: (context, child) {
-                final scale = 1.0 + (_pulseController.value * 0.08);
-                final glowOpacity = 0.2 + (_pulseController.value * 0.25);
-                return Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: TrustLayerColors.surfaceElevated,
-                    border: Border.all(
-                      color: TrustLayerColors.primary.withOpacity(0.5),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: TrustLayerColors.primary.withOpacity(glowOpacity),
-                        blurRadius: 28,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Transform.scale(
-                      scale: scale,
-                      child: const Icon(
-                        Icons.shield_outlined,
-                        size: 44,
-                        color: TrustLayerColors.primary,
-                      ),
-                    ),
+                final scale = 1.0 + (_pulseController.value * 0.05);
+                return Transform.scale(
+                  scale: scale,
+                  child: const CyberShield3D(
+                    size: 130,
+                    glowColor: TrustLayerColors.primary,
                   ),
                 );
               },
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             Text(
               'TRUSTLAYER',
               style: GoogleFonts.inter(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
-                letterSpacing: 3.0,
+                letterSpacing: 3.5,
                 color: TrustLayerColors.textPrimary,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               'AUTONOMOUS CYBER DEFENSE CORE',
               style: GoogleFonts.jetBrainsMono(
-                fontSize: 10,
-                letterSpacing: 2.0,
+                fontSize: 9.5,
+                letterSpacing: 2.2,
                 fontWeight: FontWeight.w600,
-                color: TrustLayerColors.primary.withOpacity(0.8),
+                color: TrustLayerColors.primary.withOpacity(0.85),
               ),
             ),
           ],

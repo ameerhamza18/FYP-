@@ -1,12 +1,19 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../main.dart';
 
-/// Interactive 3D Perspective Defense Shield.
+import '../main.dart';
+import 'cyber_shield_3d.dart';
+
+/// Interactive 3D Perspective Defense Shield Card.
 ///
-/// Implements tactile gyroscopic/touch tilt using Matrix4 3D perspective transforms,
-/// layered holographic radar arcs, calibrated tick rings, and real-time status pulses.
+/// Features:
+/// - Exact visual styling from Screen 2 of `mobile-app.jpg`:
+///   - Beveled 3D Chrome Cyber Shield (`CyberShield3D`)
+///   - Top/center label: "3D SHIELD"
+///   - Status badge: "SYSTEM SECURE" (in glowing emerald) or "PROTECTION STANDBY"
+///   - 4 pagination dots carousel indicator
+/// - Matrix4 3D tilt perspective responding smoothly to finger drags
 class DefenseShield3D extends StatefulWidget {
   const DefenseShield3D({
     super.key,
@@ -23,8 +30,6 @@ class DefenseShield3D extends StatefulWidget {
 
 class _DefenseShield3DState extends State<DefenseShield3D>
     with TickerProviderStateMixin {
-  late final AnimationController _rotationController;
-  late final AnimationController _reverseRotationController;
   late final AnimationController _pulseController;
   late final AnimationController _tiltSpringController;
 
@@ -36,28 +41,14 @@ class _DefenseShield3DState extends State<DefenseShield3D>
   @override
   void initState() {
     super.initState();
-    // Continuous subtle holographic sweep rotation
-    _rotationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    )..repeat();
-
-    // Reverse rotating outer calibrated ring
-    _reverseRotationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 16),
-    )..repeat(reverse: false);
-
-    // Subtle breathing pulse for core glow
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
 
-    // Spring-back animation on touch release
     _tiltSpringController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 350),
     )..addListener(() {
         setState(() {
           _tiltX = (1.0 - _tiltSpringController.value) * _prevTiltX;
@@ -68,8 +59,6 @@ class _DefenseShield3DState extends State<DefenseShield3D>
 
   @override
   void dispose() {
-    _rotationController.dispose();
-    _reverseRotationController.dispose();
     _pulseController.dispose();
     _tiltSpringController.dispose();
     super.dispose();
@@ -78,9 +67,8 @@ class _DefenseShield3DState extends State<DefenseShield3D>
   void _onPanUpdate(DragUpdateDetails details) {
     _tiltSpringController.stop();
     setState(() {
-      // Clamp tilt to max +/- 0.35 radians (~20 degrees)
-      _tiltX = (_tiltX - details.delta.dy * 0.005).clamp(-0.35, 0.35);
-      _tiltY = (_tiltY + details.delta.dx * 0.005).clamp(-0.35, 0.35);
+      _tiltX = (_tiltX - details.delta.dy * 0.005).clamp(-0.25, 0.25);
+      _tiltY = (_tiltY + details.delta.dx * 0.005).clamp(-0.25, 0.25);
     });
   }
 
@@ -97,12 +85,8 @@ class _DefenseShield3DState extends State<DefenseShield3D>
         : const Color(0xFFF59E0B); // Emerald / Amber
 
     final statusText = widget.isProtected
-        ? 'SENTINEL CORE ARMED'
+        ? 'SYSTEM SECURE'
         : 'PROTECTION STANDBY';
-
-    final subtext = widget.isProtected
-        ? 'Autonomous neural interception & heuristic screening active'
-        : 'Action required to arm background SMS & chat sensors';
 
     return GestureDetector(
       onPanUpdate: _onPanUpdate,
@@ -111,274 +95,218 @@ class _DefenseShield3DState extends State<DefenseShield3D>
       child: Transform(
         alignment: Alignment.center,
         transform: Matrix4.identity()
-          ..setEntry(3, 2, 0.0016) // 3D Perspective depth factor
+          ..setEntry(3, 2, 0.0015) // Perspective depth
           ..rotateX(_tiltX)
           ..rotateY(_tiltY),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            // Multi-layered obsidian gradient
+            // Multi-layered obsidian glass gradient
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFF0F1829),
-                Color(0xFF060913),
+                Color(0xFF0D1726),
+                Color(0xFF050812),
               ],
             ),
             border: Border.all(
-              color: statusColor.withOpacity(0.32),
+              color: statusColor.withOpacity(0.35),
               width: 1.2,
             ),
             boxShadow: [
               BoxShadow(
-                color: statusColor.withOpacity(0.14),
-                blurRadius: 36,
-                spreadRadius: 2,
-                offset: const Offset(0, 12),
+                color: statusColor.withOpacity(0.12),
+                blurRadius: 32,
+                spreadRadius: 1,
+                offset: const Offset(0, 10),
               ),
               const BoxShadow(
                 color: Colors.black87,
-                blurRadius: 24,
+                blurRadius: 20,
                 offset: Offset(0, 8),
               ),
             ],
           ),
-          child: Stack(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Reticle corner accents
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _TacticalCornersPainter(accentColor: statusColor),
-                ),
-              ),
-              Column(
+              // Header Badge & Title
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Top Monospace Telemetry Header
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          AnimatedBuilder(
-                            animation: _pulseController,
-                            builder: (context, child) {
-                              return Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: statusColor,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: statusColor.withOpacity(0.5 + (_pulseController.value * 0.5)),
-                                      blurRadius: 8,
-                                      spreadRadius: 1,
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'SENTINEL // 3D DEFENSE MATRIX',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.all(5),
                         decoration: BoxDecoration(
                           color: statusColor.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: statusColor.withOpacity(0.35)),
                         ),
-                        child: Text(
-                          widget.isProtected ? 'ONLINE · ARMED' : 'ATTENTION',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.0,
-                            color: statusColor,
-                          ),
+                        child: Icon(
+                          Icons.radar_rounded,
+                          size: 14,
+                          color: statusColor,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'SENTINEL SHIELD MATRIX',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                          color: Colors.white70,
                         ),
                       ),
                     ],
                   ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: statusColor.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      widget.isProtected ? 'ONLINE' : 'ARM SENSORS',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
 
-                  const SizedBox(height: 24),
+              const SizedBox(height: 18),
 
-                  // 3D Holographic Concentric Shield Core
-                  SizedBox(
-                    width: 170,
-                    height: 170,
-                    child: Stack(
-                      alignment: Alignment.center,
+              // Center 3D Chrome Shield with circuit background
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  CyberShield3D(
+                    size: 190,
+                    glowColor: statusColor,
+                  ),
+                  // "3D SHIELD" badge overlay matching mobile-app.jpg
+                  Positioned(
+                    top: 56,
+                    child: Column(
                       children: [
-                        // Outer reverse rotating calibrated ring
-                        AnimatedBuilder(
-                          animation: _reverseRotationController,
-                          builder: (context, child) {
-                            return Transform.rotate(
-                              angle: -_reverseRotationController.value * 2 * math.pi,
-                              child: CustomPaint(
-                                size: const Size(170, 170),
-                                painter: _OuterGimbalPainter(accentColor: statusColor),
+                        Text(
+                          '3D',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                            color: Colors.white.withOpacity(0.9),
+                            shadows: [
+                              Shadow(
+                                color: Colors.black.withOpacity(0.8),
+                                blurRadius: 8,
                               ),
-                            );
-                          },
+                            ],
+                          ),
                         ),
-
-                        // Inner rotating radar sweep ring
-                        AnimatedBuilder(
-                          animation: _rotationController,
-                          builder: (context, child) {
-                            return Transform.rotate(
-                              angle: _rotationController.value * 2 * math.pi,
-                              child: CustomPaint(
-                                size: const Size(140, 140),
-                                painter: _RadarSweepPainter(accentColor: statusColor),
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Core pulsing halo
-                        AnimatedBuilder(
-                          animation: _pulseController,
-                          builder: (context, child) {
-                            final scale = 0.96 + (_pulseController.value * 0.08);
-                            return Transform.scale(
-                              scale: scale,
-                              child: Container(
-                                width: 84,
-                                height: 84,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: RadialGradient(
-                                    colors: [
-                                      statusColor.withOpacity(0.25),
-                                      const Color(0xFF040711).withOpacity(0.9),
-                                    ],
-                                  ),
-                                  border: Border.all(
-                                    color: statusColor.withOpacity(0.6),
-                                    width: 1.8,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: statusColor.withOpacity(0.35),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  widget.isProtected
-                                      ? Icons.security_rounded
-                                      : Icons.gpp_maybe_rounded,
-                                  color: statusColor,
-                                  size: 42,
-                                ),
-                              ),
-                            );
-                          },
+                        Text(
+                          'SHIELD',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 2.0,
+                            color: TrustLayerColors.primary,
+                          ),
                         ),
                       ],
                     ),
                   ),
+                ],
+              ),
 
-                  const SizedBox(height: 22),
+              const SizedBox(height: 16),
 
-                  // Status Headline
+              // Status Headline ("SYSTEM SECURE")
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      return Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: statusColor,
+                          boxShadow: [
+                            BoxShadow(
+                              color: statusColor.withOpacity(
+                                  0.4 + (_pulseController.value * 0.5)),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
                   Text(
                     statusText,
                     style: GoogleFonts.inter(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.0,
-                      color: Colors.white,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  // Status Subtext
-                  Text(
-                    subtext,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      height: 1.4,
-                      color: TrustLayerColors.textSecondary,
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Micro Telemetry Readout Strip
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF040711),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'SENSORS: 4/4',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white54,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(width: 3, height: 3, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white30)),
-                        const SizedBox(width: 10),
-                        Text(
-                          'LATENCY: 14ms',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white54,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(width: 3, height: 3, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white30)),
-                        const SizedBox(width: 10),
-                        Text(
-                          'INTEGRITY: 100%',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: statusColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Touch Interaction Hint
-                  Text(
-                    '✦ DRAG TO TILT 3D PERSPECTIVE',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w500,
                       letterSpacing: 1.5,
-                      color: Colors.white30,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // 4 Pagination Dots underneath (matching mobile-app.jpg)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 14,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
                     ),
                   ),
                 ],
@@ -389,132 +317,4 @@ class _DefenseShield3DState extends State<DefenseShield3D>
       ),
     );
   }
-}
-
-/// Tactical corner reticle painter
-class _TacticalCornersPainter extends CustomPainter {
-  _TacticalCornersPainter({required this.accentColor});
-  final Color accentColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = accentColor.withOpacity(0.28)
-      ..strokeWidth = 1.4
-      ..style = PaintingStyle.stroke;
-
-    const len = 12.0;
-
-    // Top-Left
-    canvas.drawLine(const Offset(0, 0), const Offset(len, 0), p);
-    canvas.drawLine(const Offset(0, 0), const Offset(0, len), p);
-
-    // Top-Right
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width - len, 0), p);
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width, len), p);
-
-    // Bottom-Left
-    canvas.drawLine(Offset(0, size.height), Offset(len, size.height), p);
-    canvas.drawLine(Offset(0, size.height), Offset(0, size.height - len), p);
-
-    // Bottom-Right
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width - len, size.height), p);
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width, size.height - len), p);
-  }
-
-  @override
-  bool shouldRepaint(covariant _TacticalCornersPainter old) => old.accentColor != accentColor;
-}
-
-/// Custom painter for holographic outer calibrated gimbal ring
-class _OuterGimbalPainter extends CustomPainter {
-  _OuterGimbalPainter({required this.accentColor});
-  final Color accentColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-
-    final tickPaint = Paint()
-      ..color = accentColor.withOpacity(0.25)
-      ..strokeWidth = 1.0;
-
-    // Outer circle
-    final ringPaint = Paint()
-      ..color = accentColor.withOpacity(0.15)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawCircle(center, radius - 2, ringPaint);
-
-    // 16 calibrated tick marks around circumference
-    for (int i = 0; i < 16; i++) {
-      final angle = (i * 2 * math.pi) / 16;
-      final isMajor = i % 4 == 0;
-      final tickLen = isMajor ? 6.0 : 3.5;
-      final p1 = Offset(
-        center.dx + (radius - 2) * math.cos(angle),
-        center.dy + (radius - 2) * math.sin(angle),
-      );
-      final p2 = Offset(
-        center.dx + (radius - 2 - tickLen) * math.cos(angle),
-        center.dy + (radius - 2 - tickLen) * math.sin(angle),
-      );
-      canvas.drawLine(p1, p2, tickPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _OuterGimbalPainter old) => old.accentColor != accentColor;
-}
-
-/// Custom painter for holographic radar rings and rotating radar sweep
-class _RadarSweepPainter extends CustomPainter {
-  _RadarSweepPainter({required this.accentColor});
-
-  final Color accentColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-
-    // 1. Concentric reference grid rings
-    final ringPaint = Paint()
-      ..color = accentColor.withOpacity(0.18)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-
-    canvas.drawCircle(center, radius * 0.72, ringPaint);
-    canvas.drawCircle(center, radius * 0.95, ringPaint);
-
-    // 2. Rotating radar gradient arc
-    final sweepPaint = Paint()
-      ..shader = SweepGradient(
-        colors: [
-          accentColor.withOpacity(0.0),
-          accentColor.withOpacity(0.3),
-        ],
-        stops: const [0.65, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: radius))
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(center, radius * 0.95, sweepPaint);
-
-    // 3. Four cardinal crosshairs
-    final crossPaint = Paint()
-      ..color = accentColor.withOpacity(0.4)
-      ..strokeWidth = 1.5;
-
-    canvas.drawLine(Offset(center.dx, 0), Offset(center.dx, 8), crossPaint);
-    canvas.drawLine(
-        Offset(center.dx, size.height - 8), Offset(center.dx, size.height), crossPaint);
-    canvas.drawLine(Offset(0, center.dy), Offset(8, center.dy), crossPaint);
-    canvas.drawLine(
-        Offset(size.width - 8, center.dy), Offset(size.width, center.dy), crossPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _RadarSweepPainter oldDelegate) =>
-      oldDelegate.accentColor != accentColor;
 }

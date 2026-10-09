@@ -146,7 +146,7 @@ function VectorLines({
 }) {
   const nodeMap = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes]);
 
-  const linesData = useMemo(() => {
+  const lineObjects = useMemo(() => {
     return edges.map(edge => {
       const fromNode = nodeMap.get(edge.from);
       const toNode = nodeMap.get(edge.to);
@@ -163,16 +163,20 @@ function VectorLines({
       if (edge.type === 'malware') color = '#ef4444';
       if (edge.type === 'c2') color = '#f59e0b';
 
-      return { geometry, color, from: fromNode, to: toNode };
-    }).filter(Boolean);
+      const material = new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.55,
+      });
+
+      return new THREE.Line(geometry, material);
+    }).filter(Boolean) as THREE.Line[];
   }, [edges, nodeMap]);
 
   return (
     <group>
-      {linesData.map((line, idx) => line && (
-        <line key={idx} geometry={line.geometry}>
-          <lineBasicMaterial color={line.color} transparent opacity={0.55} linewidth={1.5} />
-        </line>
+      {lineObjects.map((lineObj, idx) => (
+        <primitive key={idx} object={lineObj} />
       ))}
     </group>
   );

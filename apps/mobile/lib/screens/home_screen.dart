@@ -4,16 +4,29 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../main.dart';
 import '../models/analysis_result.dart';
 import '../services/analysis_queue.dart';
 import '../services/api_client.dart';
 import '../services/protection_service.dart';
-import '../main.dart';
 import '../widgets/defense_shield_3d.dart';
 import '../widgets/protection_card.dart';
+import '../widgets/scanning_overlay.dart';
+import 'history_profile_screen.dart';
 import 'login_screen.dart';
+import 'onboarding_screen.dart';
 import 'result_screen.dart';
 
+/// Screen 2 ("Main Home/Security Dashboard") matching `mobile-app.jpg`.
+///
+/// Features:
+/// - Top Bar: Menu Hamburger button & Notification Bell with unread alert dot
+/// - 3D Shield Hero with "3D SHIELD", "SYSTEM SECURE" and 4-dot indicator
+/// - Real OS Protection Status & Sensors integration
+/// - Quick Action Cards: "Scan Message" & "Scan URL"
+/// - "Latest Activity" section with "See All" link and recent scan items
+/// - Bottom Navigation Bar (5 tabs with center glowing floating action button)
+/// - Integrated Fullscreen Animated Scanning Overlay during live scans
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -26,16 +39,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _picker = ImagePicker();
   List<AnalysisResult> _recent = [];
   bool _busy = false;
+  String _scanStatusMessage = 'TrustLayer AI is actively scanning…';
+  int _currentNavIndex = 0;
 
-  /// Real protection state, straight from Android. Starts as "unknown" so the UI
-  /// never claims protection it has not verified.
+  // Real protection state from Android platform layer
   ProtectionStatus _protection = ProtectionStatus.unknown;
   bool _protectionBusy = false;
   StreamSubscription<ProtectionStatus>? _protectionSub;
 
-  /// Non-null when the history fetch failed. Without this the screen showed
-  /// "No threats detected yet" after a network failure, which told users the
-  /// opposite of the truth.
   String? _historyError;
   bool _historyLoading = true;
 
@@ -54,8 +65,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// Permissions are granted in system settings, so coming back to the app is the
-  /// only reliable moment to re-check whether anything changed.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -71,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() => _recent = h);
     } on SessionExpiredException {
-      // The global handler in main.dart signs the user out; nothing to show.
+      // Handled globally
     } on ApiException catch (e) {
       if (mounted) setState(() => _historyError = e.message);
     } catch (_) {
@@ -80,9 +89,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (mounted) setState(() => _historyLoading = false);
     }
   }
-  /// Connects to Android's interception layer: installs the handler that receives
-  /// intercepted messages, subscribes to live protection status, and replays
-  /// anything that arrived while the app was closed.
+
   Future<void> _initProtection() async {
     await ProtectionService.initialize(onIntercepted: _handleInterception);
 
@@ -92,11 +99,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     await _refreshProtection();
 
-    // Cold-start handshake: text shared into the app or a tapped warning.
     final initial = await ProtectionService.takeInitialInterception();
     if (initial != null) _handleInterception(initial);
 
-    // Messages intercepted while the app was closed or offline.
     await _replayPendingInterceptions();
     await _flushOfflineQueue();
   }
@@ -113,17 +118,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _snack('${pending.length} message(s) were checked while the app was closed.');
     }
     for (final message in pending) {
-      // Silent: these were already intercepted and the user has been told; the
-      // results land in Recent Threats instead of stacking result screens.
       _handleInterception(message, showResult: false);
     }
   }
 
-  /// Uploads analyses that failed earlier because the phone was offline.
-  ///
-  /// Every early exit path re-queues both the untried part of the batch and the
-  /// items that were beyond it — the queue is cleared up-front, so anything not
-  /// explicitly put back would be silently lost.
   static const int _maxFlushPerResume = 5;
 
   Future<void> _flushOfflineQueue() async {
@@ -145,17 +143,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await _api.analyzeText(item.text, source: item.source, sender: item.sender);
         checked++;
       } on SessionExpiredException {
-        // main.dart is already taking the user back to sign-in; keep the rest.
         failed.addAll(batch.sublist(checked));
         stopped = true;
       } on NetworkException {
         failed.addAll(batch.sublist(checked));
         stopped = true;
         offline = true;
-      } catch (_) {
-        // Permanently invalid item (e.g. rejected by validation): drop it rather
-        // than retry it forever and block the queue.
-      }
+      } catch (_) {}
     }
 
     await _requeue([...failed, ...tail]);
@@ -181,6 +175,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       () => _api.analyzeText(message.text, source: message.source, sender: message.sender),
       showResult: showResult,
       queueOnOffline: message,
+      statusMsg: 'Auditing intercepted ${_sourceLabel(message.source)} telemetry…',
     );
   }
 
@@ -197,7 +192,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // --------------------------------------------------------- protection setup
   Future<void> _enableSmsProtection() async {
     setState(() => _protectionBusy = true);
     await ProtectionService.requestSmsPermission();
@@ -224,7 +218,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _refreshProtection();
   }
 
-
   Future<void> _analyzeText() async {
     final controller = TextEditingController();
     final text = await showDialog<String>(
@@ -240,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const Icon(Icons.document_scanner_outlined, color: TrustLayerColors.primary, size: 20),
             const SizedBox(width: 8),
             Text(
-              'FORENSIC TEXT INSPECTOR',
+              'SCAN MESSAGE / TEXT',
               style: GoogleFonts.jetBrainsMono(
                 color: TrustLayerColors.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -252,11 +245,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         content: TextField(
           controller: controller,
-          maxLines: 6,
+          maxLines: 5,
           autofocus: true,
           style: const TextStyle(color: TrustLayerColors.textPrimary, fontSize: 13),
           decoration: InputDecoration(
-            hintText: 'Paste SMS, WhatsApp payload, email header or body…',
+            hintText: 'Paste SMS, WhatsApp text, email, or message payload…',
             hintStyle: TextStyle(color: TrustLayerColors.textSecondary.withOpacity(0.6), fontSize: 12),
             filled: true,
             fillColor: const Color(0xFF040711),
@@ -273,7 +266,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: TrustLayerColors.textSecondary)),
+            child: const Text('Cancel', style: TextStyle(color: TrustLayerColors.textSecondary)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -282,19 +275,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('Execute Heuristic Scan', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Run Neural Scan', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
     if (text == null || text.trim().isEmpty) return;
-    await _run(() => _api.analyzeText(text.trim()));
+    await _run(
+      () => _api.analyzeText(text.trim()),
+      statusMsg: 'TrustLayer AI is actively scanning message…',
+    );
   }
 
   Future<void> _analyzeScreenshot() async {
     final img = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (img == null) return;
-    await _run(() => _api.analyzeScreenshot(img));
+    await _run(
+      () => _api.analyzeScreenshot(img),
+      statusMsg: 'Optical OCR heuristic parsing in progress…',
+    );
   }
 
   Future<void> _checkUrl() async {
@@ -312,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const Icon(Icons.link_rounded, color: TrustLayerColors.primary, size: 20),
             const SizedBox(width: 8),
             Text(
-              'URL & DOMAIN REPUTATION',
+              'PROBE SUSPICIOUS URL',
               style: GoogleFonts.jetBrainsMono(
                 color: TrustLayerColors.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -327,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           autofocus: true,
           style: const TextStyle(color: TrustLayerColors.textPrimary, fontSize: 13),
           decoration: InputDecoration(
-            hintText: 'https://suspicious-login.example.com/verify',
+            hintText: 'https://security-verify.example.com/login',
             hintStyle: TextStyle(color: TrustLayerColors.textSecondary.withOpacity(0.6), fontSize: 12),
             filled: true,
             fillColor: const Color(0xFF040711),
@@ -344,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: TrustLayerColors.textSecondary)),
+            child: const Text('Cancel', style: TextStyle(color: TrustLayerColors.textSecondary)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -359,15 +358,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
     if (url == null || url.trim().isEmpty) return;
-    await _run(() => _api.analyzeUrl(url.trim()));
+    await _run(
+      () => _api.analyzeUrl(url.trim()),
+      statusMsg: 'Probing domain reputation & typosquat telemetry…',
+    );
   }
 
   Future<void> _run(
     Future<AnalysisResult> Function() job, {
     bool showResult = true,
     InterceptedMessage? queueOnOffline,
+    String? statusMsg,
   }) async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      if (statusMsg != null) _scanStatusMessage = statusMsg;
+    });
     try {
       final result = await job();
       if (!mounted) return;
@@ -378,10 +384,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
       await _loadHistory();
     } on SessionExpiredException {
-      // The global handler in main.dart returns the user to the login screen.
+      // Global handler routes to login
     } on NetworkException catch (e) {
-      // An interception is a one-time event: if the upload fails the user would
-      // simply never be warned, so it is queued and retried automatically.
       if (queueOnOffline != null) {
         await AnalysisQueue.add(
           text: queueOnOffline.text,
@@ -404,151 +408,256 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _snack(String msg) {
-    // Every call site sits after an `await`, so the widget may already be
-    // detached (user navigated away) — using context here would throw.
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Color _levelColor(String level) {
-    switch (level) {
-      case 'CRITICAL': return TrustLayerColors.critical;
-      case 'HIGH': return TrustLayerColors.high;
-      case 'MEDIUM': return TrustLayerColors.medium;
-      default: return TrustLayerColors.low;
-    }
+  void _showScanModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF090E1B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: TrustLayerColors.surfaceBorder, width: 1.2),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'COMMENCE CYBER AUDIT',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                  color: TrustLayerColors.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: TrustLayerColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.chat_bubble_outline_rounded, color: TrustLayerColors.primary),
+                ),
+                title: const Text('Scan Message / Text', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                subtitle: const Text('Analyze SMS, WhatsApp, phishing emails', style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _analyzeText();
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: TrustLayerColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.link_rounded, color: Color(0xFF3B82F6)),
+                ),
+                title: const Text('Scan URL / Domain', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                subtitle: const Text('Inspect domains for spoofing and typosquatting', style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _checkUrl();
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: TrustLayerColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.center_focus_strong_outlined, color: Color(0xFF10B981)),
+                ),
+                title: const Text('Screenshot OCR Scan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                subtitle: const Text('Extract visual text via server OCR engine', style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _analyzeScreenshot();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: TrustLayerColors.background,
+      // Top Navigation Bar matching Screen 2
       appBar: AppBar(
         backgroundColor: TrustLayerColors.background,
         elevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu_rounded, color: Colors.white70, size: 24),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
                 color: TrustLayerColors.surfaceElevated,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: TrustLayerColors.primary.withOpacity(0.35)),
               ),
-              child: const Icon(Icons.shield_outlined, size: 18, color: TrustLayerColors.primary),
+              child: const Icon(Icons.shield_outlined, size: 16, color: TrustLayerColors.primary),
             ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'TRUSTLAYER',
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w800,
-                    color: TrustLayerColors.textPrimary,
-                    letterSpacing: 1.5,
-                    fontSize: 15,
-                  ),
-                ),
-                Row(
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: TrustLayerColors.low,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'SOC MONITOR · ONLINE',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 8.5,
-                        letterSpacing: 0.8,
-                        fontWeight: FontWeight.w600,
-                        color: TrustLayerColors.low,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            const SizedBox(width: 8),
+            Text(
+              'TrustLayer',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w800,
+                color: TrustLayerColors.textPrimary,
+                letterSpacing: 1.0,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
+        centerTitle: true,
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: TrustLayerColors.textSecondary),
-            color: TrustLayerColors.surface,
-            onSelected: (value) async {
-              if (value == 'logout') {
-                await _api.logout();
-                if (!mounted) return;
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              } else if (value == 'delete_account') {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    backgroundColor: TrustLayerColors.surface,
-                    title: const Text('Delete Account', style: TextStyle(color: TrustLayerColors.critical)),
-                    content: const Text(
-                      'Are you sure you want to permanently delete your account and all associated threat data? This cannot be undone.',
-                      style: TextStyle(color: TrustLayerColors.textPrimary),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Cancel', style: TextStyle(color: TrustLayerColors.textSecondary)),
+          // Notification Bell with Glowing Alert Dot
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none_rounded, color: Colors.white70, size: 22),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => HistoryProfileScreen(
+                        recentScans: _recent,
+                        onRefresh: _loadHistory,
+                        initialTab: 0,
                       ),
-                      FilledButton(
-                        style: FilledButton.styleFrom(backgroundColor: TrustLayerColors.critical),
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Delete Permanently'),
+                    ),
+                  );
+                },
+              ),
+              Positioned(
+                top: 13,
+                right: 13,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFEF4444),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFEF4444).withOpacity(0.8),
+                        blurRadius: 6,
+                        spreadRadius: 1,
                       ),
                     ],
                   ),
-                );
-                if (confirm == true) {
-                  try {
-                    await _api.deleteAccount();
-                    if (!mounted) return;
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    );
-                  } catch (e) {
-                    _snack('Failed to delete account');
-                  }
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, size: 20, color: TrustLayerColors.textSecondary),
-                    SizedBox(width: 10),
-                    Text('Sign out', style: TextStyle(color: TrustLayerColors.textPrimary)),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'delete_account',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_forever, size: 20, color: TrustLayerColors.critical),
-                    SizedBox(width: 10),
-                    Text('Delete Account', style: TextStyle(color: TrustLayerColors.critical)),
-                  ],
                 ),
               ),
             ],
           ),
+          const SizedBox(width: 4),
         ],
       ),
+      // Tactical Drawer
+      drawer: Drawer(
+        backgroundColor: const Color(0xFF080D1A),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: TrustLayerColors.surfaceElevated,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: TrustLayerColors.primary.withOpacity(0.5)),
+                      ),
+                      child: const Icon(Icons.shield_rounded, color: TrustLayerColors.primary, size: 26),
+                    ),
+                    const SizedBox(width: 14),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('TrustLayer 3D', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+                        Text('AUTONOMOUS CORE', style: GoogleFonts.jetBrainsMono(fontSize: 9, color: TrustLayerColors.primary, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(color: TrustLayerColors.surfaceBorder, height: 1),
+              ListTile(
+                leading: const Icon(Icons.explore_outlined, color: TrustLayerColors.primary),
+                title: const Text('Onboarding Tour', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const OnboardingScreen()));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.history_rounded, color: TrustLayerColors.primary),
+                title: const Text('Scan History & Profile', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => HistoryProfileScreen(
+                        recentScans: _recent,
+                        onRefresh: _loadHistory,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const Spacer(),
+              ListTile(
+                leading: const Icon(Icons.logout, color: TrustLayerColors.critical),
+                title: const Text('Sign Out', style: TextStyle(color: TrustLayerColors.critical)),
+                onTap: () async {
+                  await _api.logout();
+                  if (!mounted) return;
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+      // Main Body
       body: Stack(
         children: [
           RefreshIndicator(
@@ -556,13 +665,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             color: TrustLayerColors.primary,
             backgroundColor: TrustLayerColors.surface,
             child: ListView(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               children: [
+                // 1. Hero 3D Shield (with 3D SHIELD label, SYSTEM SECURE, 4 dots)
                 DefenseShield3D(
                   isProtected: _protection.automaticSmsProtection,
+                  onTap: _showScanModal,
                 ),
+
                 const SizedBox(height: 18),
-                // Real, OS-verified protection state
+
+                // Real OS-verified Protection Card Sensors
                 ProtectionCard(
                   status: _protection,
                   busy: _protectionBusy,
@@ -574,149 +687,142 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   onOpenBatterySettings: () =>
                       ProtectionService.openBatteryOptimizationSettings(),
                 ),
-                const SizedBox(height: 28),
+
+                const SizedBox(height: 24),
+
+                // 2. Quick Action Cards (Side by side matching Screen 2)
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'FORENSIC PIPELINE',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                        color: TrustLayerColors.textPrimary,
+                    // Card 1: Scan Message
+                    Expanded(
+                      child: _quickActionCard(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        title: 'Scan Message',
+                        subtitle: 'SMS / Chat Payload',
+                        accentColor: TrustLayerColors.primary,
+                        onTap: _analyzeText,
                       ),
                     ),
-                    Text(
-                      'CHAMBERS 01-04',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.0,
-                        color: TrustLayerColors.textMuted,
+                    const SizedBox(width: 14),
+                    // Card 2: Scan URL
+                    Expanded(
+                      child: _quickActionCard(
+                        icon: Icons.link_rounded,
+                        title: 'Scan URL',
+                        subtitle: 'Domain Heuristics',
+                        accentColor: const Color(0xFF3B82F6),
+                        onTap: _checkUrl,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 1.08,
-                  children: [
-                    _toolCard(
-                      chamber: '01',
-                      icon: Icons.chat_bubble_outline_rounded,
-                      title: 'Analyze Text',
-                      subtitle: 'SMS / WhatsApp / Mail',
-                      onTap: _analyzeText,
-                    ),
-                    _toolCard(
-                      chamber: '02',
-                      icon: Icons.center_focus_strong_outlined,
-                      title: 'Screenshot OCR',
-                      subtitle: 'Visual Heuristic Parser',
-                      onTap: _analyzeScreenshot,
-                    ),
-                    _toolCard(
-                      chamber: '03',
-                      icon: Icons.link_rounded,
-                      title: 'Probe URL',
-                      subtitle: 'Domain & Typosquat Check',
-                      onTap: _checkUrl,
-                    ),
-                    _toolCard(
-                      chamber: '04',
-                      icon: Icons.history_rounded,
-                      title: 'Telemetry Log',
-                      subtitle: 'Sync Audit Records',
-                      onTap: () => _loadHistory(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'DETECTED THREAT LOG',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                        color: TrustLayerColors.textPrimary,
-                      ),
-                    ),
-                    if (_recent.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: TrustLayerColors.surfaceElevated,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: TrustLayerColors.surfaceBorder),
-                        ),
-                        child: Text(
-                          '${_recent.length} INCIDENTS',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.8,
-                            color: TrustLayerColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+
                 const SizedBox(height: 12),
+
+                // Secondary Quick Row: Screenshot OCR & Chamber Audit
+                Row(
+                  children: [
+                    Expanded(
+                      child: _quickActionCard(
+                        icon: Icons.center_focus_strong_outlined,
+                        title: 'Screenshot OCR',
+                        subtitle: 'Visual Heuristic',
+                        accentColor: const Color(0xFF10B981),
+                        onTap: _analyzeScreenshot,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _quickActionCard(
+                        icon: Icons.history_rounded,
+                        title: 'Audit Vault',
+                        subtitle: 'Telemetry Log',
+                        accentColor: const Color(0xFFF59E0B),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => HistoryProfileScreen(
+                                recentScans: _recent,
+                                onRefresh: _loadHistory,
+                                initialTab: 0,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 28),
+
+                // 3. Latest Activity Section (Matching Screen 2)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Latest Activity',
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: TrustLayerColors.textPrimary,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => HistoryProfileScreen(
+                              recentScans: _recent,
+                              onRefresh: _loadHistory,
+                              initialTab: 0,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        'See All',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: TrustLayerColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                // Activity List Items
                 if (_historyLoading && _recent.isEmpty)
                   const Center(
                     child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
+                      padding: EdgeInsets.symmetric(vertical: 30),
                       child: CircularProgressIndicator(color: TrustLayerColors.primary),
                     ),
                   )
-                else if (_recent.isEmpty && _historyError != null)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 40),
-                      child: Column(
-                        children: [
-                          Icon(Icons.cloud_off, size: 44,
-                              color: TrustLayerColors.high.withOpacity(0.7)),
-                          const SizedBox(height: 8),
-                          Text(
-                            _historyError!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: TrustLayerColors.high, fontSize: 13),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: _loadHistory,
-                            child: const Text('Retry Telemetry Sync',
-                                style: TextStyle(color: TrustLayerColors.primary, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
                 else if (_recent.isEmpty)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 40),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: TrustLayerColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: TrustLayerColors.surfaceBorder),
+                    ),
+                    child: Center(
                       child: Column(
                         children: [
-                          Icon(Icons.shield_outlined, size: 48,
-                              color: TrustLayerColors.textMuted.withOpacity(0.4)),
-                          const SizedBox(height: 10),
+                          Icon(Icons.shield_outlined, size: 36, color: TrustLayerColors.textMuted.withOpacity(0.5)),
+                          const SizedBox(height: 8),
                           Text(
-                            'NO THREAT INCIDENTS DETECTED',
+                            'NO ACTIVITY YET',
                             style: GoogleFonts.jetBrainsMono(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              letterSpacing: 1.0,
                               color: TrustLayerColors.textMuted,
                             ),
                           ),
@@ -725,108 +831,197 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                   )
                 else
-                  ..._recent.map((r) => _threatTile(r)),
+                  ..._recent.take(4).map((r) => _activityItem(r)),
+
+                const SizedBox(height: 80), // Space for docked bottom nav
               ],
             ),
           ),
+
+          // 4. Integrated Fullscreen Animated Scanning Overlay (Screen 3)
           if (_busy)
-            Container(
-              color: TrustLayerColors.background.withOpacity(0.85),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(color: TrustLayerColors.primary),
-                    const SizedBox(height: 16),
-                    Text(
-                      'EXECUTING MULTI-ENGINE AUDIT…',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11,
-                        letterSpacing: 1.2,
-                        fontWeight: FontWeight.bold,
-                        color: TrustLayerColors.primary,
-                      ),
+            ScanningOverlay(
+              message: _scanStatusMessage,
+              submessage: 'TrustLayer AI is detecting anomalies for financial fraud.',
+            ),
+        ],
+      ),
+
+      // Docked 5-tab Bottom Navigation Bar matching Screen 2
+      bottomNavigationBar: Container(
+        height: 72,
+        decoration: BoxDecoration(
+          color: const Color(0xFF060913),
+          border: Border(
+            top: BorderSide(
+              color: TrustLayerColors.surfaceBorder.withOpacity(0.8),
+              width: 1.0,
+            ),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.6),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            // Tab 1: Home
+            _navIcon(
+              icon: Icons.home_rounded,
+              index: 0,
+              onTap: () => setState(() => _currentNavIndex = 0),
+            ),
+            // Tab 2: Forensics / Search
+            _navIcon(
+              icon: Icons.search_rounded,
+              index: 1,
+              onTap: () => _analyzeText(),
+            ),
+            // Tab 3: Center Elevated Floating Shield Scan Button
+            GestureDetector(
+              onTap: _showScanModal,
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF0C1A30),
+                  border: Border.all(
+                    color: TrustLayerColors.primary.withOpacity(0.8),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: TrustLayerColors.primary.withOpacity(0.4),
+                      blurRadius: 16,
+                      spreadRadius: 1,
                     ),
                   ],
                 ),
+                child: const Center(
+                  child: Icon(
+                    Icons.shield_rounded,
+                    color: TrustLayerColors.primary,
+                    size: 24,
+                  ),
+                ),
               ),
             ),
-        ],
+            // Tab 4: Telemetry Log
+            _navIcon(
+              icon: Icons.tune_rounded,
+              index: 3,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => HistoryProfileScreen(
+                      recentScans: _recent,
+                      onRefresh: _loadHistory,
+                      initialTab: 0,
+                    ),
+                  ),
+                );
+              },
+            ),
+            // Tab 5: Profile
+            _navIcon(
+              icon: Icons.person_outline_rounded,
+              index: 4,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => HistoryProfileScreen(
+                      recentScans: _recent,
+                      onRefresh: _loadHistory,
+                      initialTab: 1,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _toolCard({
-    required String chamber,
+  Widget _navIcon({
+    required IconData icon,
+    required int index,
+    required VoidCallback onTap,
+  }) {
+    final isActive = _currentNavIndex == index;
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(
+        icon,
+        size: 24,
+        color: isActive ? TrustLayerColors.primary : Colors.white38,
+      ),
+    );
+  }
+
+  Widget _quickActionCard({
     required IconData icon,
     required String title,
     required String subtitle,
+    required Color accentColor,
     required VoidCallback onTap,
   }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: TrustLayerColors.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: TrustLayerColors.surfaceBorder, width: 1.0),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          border: Border.all(color: TrustLayerColors.surfaceBorder),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Row(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: TrustLayerColors.surfaceElevated,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: TrustLayerColors.primary.withOpacity(0.3)),
-                  ),
-                  child: Icon(icon, size: 20, color: TrustLayerColors.primary),
-                ),
-                Text(
-                  'CH-$chamber',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
-                    color: TrustLayerColors.primary.withOpacity(0.7),
-                  ),
-                ),
-              ],
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: TrustLayerColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: accentColor.withOpacity(0.35)),
+              ),
+              child: Icon(icon, size: 20, color: accentColor),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    color: TrustLayerColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: TrustLayerColors.textSecondary,
-                    fontSize: 10,
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: TrustLayerColors.textSecondary,
+                      fontSize: 10,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
@@ -834,8 +1029,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _threatTile(AnalysisResult r) {
-    final color = _levelColor(r.riskLevel);
+  Widget _activityItem(AnalysisResult r) {
+    final isCritical = r.riskLevel == 'CRITICAL' || r.riskLevel == 'HIGH';
+    IconData icon = Icons.chat_bubble_outline_rounded;
+    if (r.inputType == 'url') icon = Icons.link_rounded;
+    if (r.inputType == 'screenshot') icon = Icons.center_focus_strong_outlined;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -844,84 +1043,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         border: Border.all(color: TrustLayerColors.surfaceBorder),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         leading: Container(
-          width: 44,
-          height: 44,
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            shape: BoxShape.circle,
-            border: Border.all(color: color.withOpacity(0.45), width: 1.5),
-          ),
-          child: Center(
-            child: Text(
-              '${r.riskScore}',
-              style: GoogleFonts.jetBrainsMono(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+            color: TrustLayerColors.surfaceElevated,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: (isCritical ? TrustLayerColors.critical : TrustLayerColors.low).withOpacity(0.3),
             ),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: isCritical ? TrustLayerColors.critical : TrustLayerColors.primary,
           ),
         ),
         title: Text(
-          r.threatType,
+          r.threatType.isNotEmpty ? r.threatType : 'TrustLayer Telemetry Scan',
           style: GoogleFonts.inter(
-            color: TrustLayerColors.textPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: 13.5,
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          'Risk Score: ${r.riskScore} · ${r.riskLevel}',
+          style: GoogleFonts.jetBrainsMono(
+            fontSize: 10,
+            color: TrustLayerColors.textSecondary,
           ),
         ),
-        subtitle: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                r.riskLevel,
-                style: GoogleFonts.jetBrainsMono(
-                  color: color,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              r.inputType.toUpperCase(),
-              style: GoogleFonts.jetBrainsMono(
-                color: TrustLayerColors.textSecondary,
-                fontSize: 9.5,
-              ),
-            ),
-          ],
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: TrustLayerColors.textSecondary,
+          size: 18,
         ),
-        trailing: r.campaignFlagged
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: TrustLayerColors.critical.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: TrustLayerColors.critical.withOpacity(0.4)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.campaign, color: TrustLayerColors.critical, size: 14),
-                    SizedBox(width: 4),
-                    Text('CAMPAIGN', style: TextStyle(color: TrustLayerColors.critical, fontSize: 8.5, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              )
-            : const Icon(Icons.chevron_right, color: TrustLayerColors.textSecondary, size: 20),
-        onTap: () async {
-          await Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => ResultScreen(result: r),
-          ));
-          _loadHistory();
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ResultScreen(result: r)),
+          );
         },
       ),
     );
