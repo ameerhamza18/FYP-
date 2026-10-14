@@ -64,3 +64,22 @@ def trigger_campaign_webhook(webhook_url: Optional[str], campaign_signature: str
         logger.warning("Failed to dispatch campaign webhook to %s: %s", webhook_url, exc)
         return False
 
+
+async def async_trigger_campaign_webhook(
+    webhook_url: Optional[str],
+    campaign_signature: str,
+    hits: int,
+    users: int,
+    snippet: Optional[str] = None,
+) -> bool:
+    """Async variant to dispatch campaign webhook alert without blocking the event loop."""
+    from starlette.concurrency import run_in_threadpool
+    return await run_in_threadpool(
+        trigger_campaign_webhook,
+        webhook_url=webhook_url,
+        campaign_signature=campaign_signature,
+        hits=hits,
+        users=users,
+        snippet=snippet,
+    )
+

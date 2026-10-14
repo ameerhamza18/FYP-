@@ -55,6 +55,19 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     last_login_at = Column(DateTime(timezone=True), nullable=True)
 
+    analyses = relationship(
+        "Analysis",
+        cascade="all, delete-orphan",
+        back_populates="user",
+        passive_deletes=True,
+    )
+    notifications = relationship(
+        "Notification",
+        cascade="all, delete-orphan",
+        back_populates="user",
+        passive_deletes=True,
+    )
+
 
 class Analysis(Base):
     __tablename__ = "analyses"
@@ -68,7 +81,7 @@ class Analysis(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     input_type = Column(String(32), nullable=False)  # text | url | screenshot
     content_hash = Column(String(64), nullable=False, index=True)
@@ -97,10 +110,21 @@ class Analysis(Base):
     latency_ms = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now, index=True)
 
-    indicators = relationship("Indicator", cascade="all, delete-orphan",
-                              back_populates="analysis", lazy="joined")
-    se_techniques = relationship("SEFinding", cascade="all, delete-orphan",
-                                 back_populates="analysis", lazy="joined")
+    user = relationship("User", back_populates="analyses")
+    indicators = relationship(
+        "Indicator",
+        cascade="all, delete-orphan",
+        back_populates="analysis",
+        lazy="joined",
+        passive_deletes=True,
+    )
+    se_techniques = relationship(
+        "SEFinding",
+        cascade="all, delete-orphan",
+        back_populates="analysis",
+        lazy="joined",
+        passive_deletes=True,
+    )
 
 
 
@@ -108,7 +132,7 @@ class Indicator(Base):
     __tablename__ = "indicators"
 
     id = Column(Integer, primary_key=True, index=True)
-    analysis_id = Column(Integer, ForeignKey("analyses.id"), nullable=False, index=True)
+    analysis_id = Column(Integer, ForeignKey("analyses.id", ondelete="CASCADE"), nullable=False, index=True)
 
     category = Column(String(64), nullable=False)   # e.g. URL, SocialEngineering, Credential
     severity = Column(String(16), nullable=False)   # INFO | LOW | MEDIUM | HIGH | CRITICAL
@@ -124,7 +148,7 @@ class SEFinding(Base):
     __tablename__ = "se_findings"
 
     id = Column(Integer, primary_key=True, index=True)
-    analysis_id = Column(Integer, ForeignKey("analyses.id"), nullable=False, index=True)
+    analysis_id = Column(Integer, ForeignKey("analyses.id", ondelete="CASCADE"), nullable=False, index=True)
 
     technique = Column(String(64), nullable=False)  # Authority, Urgency, Fear, ...
     intensity = Column(String(16), nullable=False)  # LOW | MEDIUM | HIGH
@@ -175,10 +199,12 @@ class Notification(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     message = Column(String(1000), nullable=False)
     notification_type = Column(String(32), nullable=False, default="alert")  # alert | campaign | system
     is_read = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now, index=True)
+
+    user = relationship("User", back_populates="notifications")
 

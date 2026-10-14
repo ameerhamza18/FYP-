@@ -79,13 +79,16 @@ def test_gemini_explainer_template_fallback_when_no_key():
     assert "TrustLayer rated this message HIGH risk" in explanation
 
 
-def test_gemini_explainer_mocked_success(monkeypatch):
+def test_gemini_explainer_mocked_success(monkeypatch, request):
     import httpx
+    import services.llm.explainer as explainer
     from app.config import get_settings
     from services.llm.explainer import generate_explanation
 
-    settings = get_settings()
-    monkeypatch.setattr(settings, "gemini_api_key", "test-gemini-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+    get_settings.cache_clear()
+    request.addfinalizer(get_settings.cache_clear)
+    monkeypatch.setattr(explainer, "settings", get_settings())
 
     mock_gemini_response = {
         "candidates": [

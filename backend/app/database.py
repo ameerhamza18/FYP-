@@ -80,11 +80,13 @@ def run_migrations() -> None:
         with engine.connect() as conn:
             inspector = inspect(conn)
             tables = inspector.get_table_names()
-            if "audit_logs" in tables and "alembic_version" in tables:
-                res = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
-                if not res:
-                    command.stamp(cfg, "head")
-                    return
+            if "audit_logs" in tables:
+                if "alembic_version" not in tables:
+                    command.stamp(cfg, "b4d7525065b0")
+                else:
+                    res = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
+                    if not res:
+                        command.stamp(cfg, "b4d7525065b0")
     except Exception:
         pass
 

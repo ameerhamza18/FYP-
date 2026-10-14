@@ -241,13 +241,13 @@ def delete_user(
             detail="Administrators cannot delete their own account via the admin panel",
         )
 
-    db.query(Notification).filter(Notification.user_id == target.id).delete()
-    db.query(Analysis).filter(Analysis.user_id == target.id).delete()
-    db.delete(target)
-    db.commit()
+    target_id = target.id
+    target_email = target.email
+    from app.services.retention import delete_user_cascade
+    delete_user_cascade(db, target)
     audit(db, "ADMIN_USER_DELETED", user_id=admin_user.id,
-          resource=f"user:{target.id}:{target.email}")
-    return {"status": "success", "message": f"User {target.email} removed"}
+          resource=f"user:{target_id}:{target_email}")
+    return {"status": "success", "message": f"User {target_email} removed"}
 
 
 @router.get("/metrics")

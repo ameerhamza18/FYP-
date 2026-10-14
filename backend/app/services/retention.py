@@ -58,3 +58,43 @@ def purge_expired_records(db: Session) -> Dict:
         "analysis_retention_days": settings.retention_analysis_days,
         "audit_retention_days": settings.retention_audit_days,
     }
+
+
+def delete_user_cascade(db: Session, user) -> None:
+    """Consistently delete a user and all cascaded relations across PostgreSQL and SQLite.
+
+    Ensures consistent deletion order:
+    1. Removes all notifications for the user.
+    2. Identifies all analyses belonging to the user.
+    3. Removes all indicator records tied to those analyses.
+    4. Removes all social-engineering finding records tied to those analyses.
+    5. Removes all analysis records for the user.
+    6. Removes the user record itself.
+    """
+    from app.models import Analysis, Indicator, Notification, SEFinding
+
+    user_id = user.id
+
+    try:
+        # 1. Delete notifications
+        db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
+
+        # 2. Find all analyses for this user
+        analysis_ids = [
+            row[0] for row in db.query(Analysis.id).filter(Analysis.user_id == user_id).all()
+        ]
+        if analysis_ids:
+            # 3. Delete indicators referencing these analyses
+            db.query(Indicator).filter(Indicator.analysis_id.in_(analysis_ids)).delete(synchronize_session=False)
+            # 4. Delete SE findings referencing these analyses
+            db.query(SEFinding).filter(SEFinding.analysis_id.in_(analysis_ids)).delete(synchronize_session=False)
+            # 5. Delete analyses
+            db.query(Analysis).filter(Analysis.id.in_(analysis_ids)).delete(synchronize_session=False)
+
+        # 6. Delete user
+        db.delete(user)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error("Failed to delete user %s and related cascade data: %s", user_id, exc)
+        raise

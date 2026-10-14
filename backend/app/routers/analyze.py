@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status, BackgroundTasks
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.config import get_settings
 from app.database import get_db
@@ -35,6 +36,7 @@ def _analyze(request: Request, user: User, input_type: str, text: str,
     analysis = analyze_content(
         user_id=user.id, input_type=input_type, text=text,
         source=source, db=db, client_ip=_client_ip(request), sender=sender,
+        background_tasks=background_tasks,
     )
     audit(db, "ANALYZE", user_id=user.id, resource=f"analysis:{analysis.id}",
           ip=_client_ip(request), user_agent=request.headers.get("user-agent"),
@@ -94,7 +96,7 @@ async def analyze_screenshot(request: Request, upload: UploadFile,
     """OCR a screenshot in memory (bytes never written to disk) and analyze."""
     image_bytes = await validate_image_upload(upload, settings.max_upload_size_bytes)
     try:
-        text = extract_text(image_bytes)
+        text = await run_in_threadpool(extract_text, image_bytes)
     except OCRUnavailableError as exc:
         logger.warning("OCR unavailable: %s", exc)
         raise HTTPException(
@@ -110,9 +112,11 @@ async def analyze_screenshot(request: Request, upload: UploadFile,
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No readable text found in the screenshot",
         )
-    analysis = _analyze(request, user, "screenshot", text, "screenshot", db,
-                        background_tasks=background_tasks)
-    return _detail(db, analysis.id)
+    analysis = await run_in_threadpool(
+        _analyze, request, user, "screenshot", text, "screenshot", db,
+        background_tasks=background_tasks
+    )
+    return await run_in_threadpool(_detail, db, analysis.id)
 
 
 @router.get("/history", response_model=list[AnalysisOut])

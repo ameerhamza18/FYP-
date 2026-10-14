@@ -47,3 +47,9 @@ def extract_text(image_bytes: bytes, lang: str = "eng") -> Optional[str]:
     cleaned = " ".join((text or "").split())
     logger.info("OCR extracted %d characters", len(cleaned))
     return cleaned if cleaned else None
+
+
+async def async_extract_text(image_bytes: bytes, lang: str = "eng") -> Optional[str]:
+    """Run OCR over raw image bytes in a worker thread to avoid blocking the event loop."""
+    from starlette.concurrency import run_in_threadpool
+    return await run_in_threadpool(extract_text, image_bytes, lang=lang)

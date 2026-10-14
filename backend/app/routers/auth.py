@@ -141,12 +141,9 @@ def delete_me(request: Request, user: User = Depends(get_current_user), db: Sess
     audit(db, "ACCOUNT_DELETED", user_id=user_id, resource=email,
           ip=request.client.host if request.client else None)
 
-    # Clean up user's analyses and findings
-    from app.models import Analysis, Notification
-    db.query(Notification).filter(Notification.user_id == user_id).delete()
-    db.query(Analysis).filter(Analysis.user_id == user_id).delete()
-    db.delete(user)
-    db.commit()
+    # Clean up user and all related records consistently
+    from app.services.retention import delete_user_cascade
+    delete_user_cascade(db, user)
     return {"status": "success", "message": f"Account {email} permanently deleted"}
 
 

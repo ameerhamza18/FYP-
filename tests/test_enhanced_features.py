@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, engine
 from app.main import app
-from app.models import Analysis, Notification, User
+from app.models import Analysis, Indicator, Notification, SEFinding, User
 
 
 from conftest import _register_and_login
@@ -238,3 +238,120 @@ def test_admin_metrics():
     assert "performance" in metrics
     assert "ml_engine" in metrics
     assert "database" in metrics
+
+
+def test_user_delete_me_cascade():
+    client = TestClient(app)
+    headers = _auth_header(client, "deleteme_cascade@test.com", "CascadePass123")
+
+    # Perform analysis that triggers indicators and SE findings
+    scam_text = (
+        "Urgent: Your Meezan Bank account is suspended! Update details now at "
+        "http://meezan-secure-update.com within 15 minutes or your account will be closed."
+    )
+    res = client.post(
+        "/api/analyze/text",
+        json={"text": scam_text, "source": "web"},
+        headers=headers,
+    )
+    assert res.status_code == 200
+    analysis_id = res.json()["id"]
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "deleteme_cascade@test.com").first()
+        assert user is not None
+        user_id = user.id
+
+        # Verify analysis, indicator, and se_finding records exist
+        analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+        assert analysis is not None
+        assert len(analysis.indicators) > 0
+        assert len(analysis.se_techniques) > 0
+
+        # Create a notification for the user
+        db.add(Notification(
+            user_id=user_id,
+            title="Security Alert",
+            message="Test notification for cascade deletion",
+            notification_type="alert",
+        ))
+        db.commit()
+
+        notifs_before = db.query(Notification).filter(Notification.user_id == user_id).count()
+        assert notifs_before >= 1
+    finally:
+        db.close()
+
+    # User deletes their account
+    del_res = client.delete("/api/auth/me", headers=headers)
+    assert del_res.status_code == 200
+    assert "permanently deleted" in del_res.json()["message"]
+
+    # Verify all related records are cleanly deleted
+    db = SessionLocal()
+    try:
+        assert db.query(User).filter(User.id == user_id).first() is None
+        assert db.query(Analysis).filter(Analysis.user_id == user_id).count() == 0
+        assert db.query(Indicator).filter(Indicator.analysis_id == analysis_id).count() == 0
+        assert db.query(SEFinding).filter(SEFinding.analysis_id == analysis_id).count() == 0
+        assert db.query(Notification).filter(Notification.user_id == user_id).count() == 0
+    finally:
+        db.close()
+
+
+def test_admin_delete_user_cascade():
+    client = TestClient(app)
+    admin_headers = _admin_header(client)
+    user_headers = _auth_header(client, "admin_delete_cascade@test.com", "CascadePass123")
+
+    # Perform analysis that triggers indicators and SE findings
+    scam_text = (
+        "Police notice: Pay your pending fine immediately at http://police-fine-portal.xyz "
+        "or face arrest within 24 hours."
+    )
+    res = client.post(
+        "/api/analyze/text",
+        json={"text": scam_text, "source": "web"},
+        headers=user_headers,
+    )
+    assert res.status_code == 200
+    analysis_id = res.json()["id"]
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "admin_delete_cascade@test.com").first()
+        assert user is not None
+        user_id = user.id
+
+        # Verify analysis, indicator, and se_finding records exist
+        analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+        assert analysis is not None
+        assert len(analysis.indicators) > 0
+
+        # Create a notification for the user
+        db.add(Notification(
+            user_id=user_id,
+            title="Warning Notice",
+            message="Test admin delete cascade notification",
+            notification_type="alert",
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    # Admin deletes the user
+    del_res = client.delete(f"/api/admin/users/{user_id}", headers=admin_headers)
+    assert del_res.status_code == 200
+    assert "removed" in del_res.json()["message"]
+
+    # Verify all related records are cleanly deleted
+    db = SessionLocal()
+    try:
+        assert db.query(User).filter(User.id == user_id).first() is None
+        assert db.query(Analysis).filter(Analysis.user_id == user_id).count() == 0
+        assert db.query(Indicator).filter(Indicator.analysis_id == analysis_id).count() == 0
+        assert db.query(SEFinding).filter(SEFinding.analysis_id == analysis_id).count() == 0
+        assert db.query(Notification).filter(Notification.user_id == user_id).count() == 0
+    finally:
+        db.close()

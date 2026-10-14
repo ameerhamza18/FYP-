@@ -15,6 +15,7 @@ import re
 import time
 from typing import Dict, List, Optional, Tuple
 
+from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.models import Analysis, Campaign, Indicator, SEFinding
@@ -111,7 +112,8 @@ def _collect_indicators(rule_result: Dict, intel_result: Dict, url_indicators: L
 
 
 def _persist_campaign(db: Session, analysis: Analysis, campaign_signature: Optional[str],
-                      verdict: Dict, raw_snippet: str) -> None:
+                      verdict: Dict, raw_snippet: str,
+                      background_tasks: Optional[BackgroundTasks] = None) -> None:
     """Correlate this analysis against known campaign signatures."""
     if not campaign_signature:
         return
@@ -136,24 +138,41 @@ def _persist_campaign(db: Session, analysis: Analysis, campaign_signature: Optio
     )
     if campaign_detector.should_flag_campaign(campaign.hits, campaign.distinct_users):
         analysis.campaign_flagged = True
-        # Fire real-time webhook alert (Slack / Discord / SOC SIEM).
+        # Fire real-time webhook alert (Slack / Discord / SOC SIEM) without blocking the event loop.
         try:
             from app.config import get_settings
             webhook_url = get_settings().campaign_webhook_url or None
-            campaign_detector.trigger_campaign_webhook(
-                webhook_url=webhook_url,
-                campaign_signature=campaign_signature,
-                hits=campaign.hits,
-                users=campaign.distinct_users,
-                snippet=campaign.sample_snippet,
-            )
+            if webhook_url:
+                if background_tasks is not None:
+                    background_tasks.add_task(
+                        campaign_detector.trigger_campaign_webhook,
+                        webhook_url=webhook_url,
+                        campaign_signature=campaign_signature,
+                        hits=campaign.hits,
+                        users=campaign.distinct_users,
+                        snippet=campaign.sample_snippet,
+                    )
+                else:
+                    import threading
+                    threading.Thread(
+                        target=campaign_detector.trigger_campaign_webhook,
+                        kwargs={
+                            "webhook_url": webhook_url,
+                            "campaign_signature": campaign_signature,
+                            "hits": campaign.hits,
+                            "users": campaign.distinct_users,
+                            "snippet": campaign.sample_snippet,
+                        },
+                        daemon=True,
+                    ).start()
         except Exception as _wh_exc:
-            logger.debug("Webhook skipped: %s", _wh_exc)
+            logger.debug("Webhook dispatch skipped: %s", _wh_exc)
 
 
 def analyze_content(user_id: int, input_type: str, text: str, source: str,
                     db: Session, client_ip: Optional[str] = None,
-                    sender: Optional[str] = None) -> Analysis:
+                    sender: Optional[str] = None,
+                    background_tasks: Optional[BackgroundTasks] = None) -> Analysis:
     """Execute the full Trust Engine pipeline and persist the result."""
     started = time.perf_counter()
 
@@ -253,7 +272,7 @@ def analyze_content(user_id: int, input_type: str, text: str, source: str,
     if campaign_signature:
         analysis.campaign_signature = campaign_signature
         db.flush()  # make the row visible to the distinct-user count query
-        _persist_campaign(db, analysis, campaign_signature, verdict, snippet)
+        _persist_campaign(db, analysis, campaign_signature, verdict, snippet, background_tasks=background_tasks)
 
     db.commit()
     logger.info("Analysis %d (%s) → %s %d/100 in %.1fms",
