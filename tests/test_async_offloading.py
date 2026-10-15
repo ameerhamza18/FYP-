@@ -147,3 +147,71 @@ def test_campaign_webhook_non_blocking_execution(monkeypatch):
 
     # Ensure settings cache cleared
     config_mod.get_settings.cache_clear()
+
+
+@pytest.mark.anyio
+async def test_screenshot_ocr_and_webhook_do_not_block_concurrent_requests(monkeypatch):
+    """Verify that a slow OCR and webhook call do not block unrelated requests on the event loop."""
+    import asyncio
+    import time
+    import httpx
+
+    # Simulate heavy OCR taking 0.3s in worker thread
+    def slow_extract_text(image_bytes: bytes, lang: str = "eng"):
+        time.sleep(0.3)
+        return "Urgent: verify your account at http://phishing-portal.xyz"
+
+    # Simulate slow webhook taking 0.5s in background
+    def slow_webhook(*args, **kwargs):
+        time.sleep(0.5)
+        return True
+
+    monkeypatch.setattr("app.routers.analyze.extract_text", slow_extract_text)
+    monkeypatch.setattr("services.threat_engine.campaign_detector.trigger_campaign_webhook", slow_webhook)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Register and login user
+        email = "concurrency_test@trustlayer.com"
+        pwd = "Passw0rd123!"
+        await ac.post("/api/auth/register", json={"email": email, "password": pwd})
+        login_res = await ac.post("/api/auth/login", json={"email": email, "password": pwd})
+        token = login_res.json()["access_token"]
+        auth_headers = {"Authorization": f"Bearer {token}"}
+
+        health_durations = []
+
+        async def run_screenshot():
+            t0 = time.perf_counter()
+            resp = await ac.post(
+                "/api/analyze/screenshot",
+                files={"upload": ("screenshot.png", io.BytesIO(PNG_BYTES), "image/png")},
+                headers=auth_headers,
+            )
+            return resp, time.perf_counter() - t0
+
+        async def run_health(delay: float):
+            await asyncio.sleep(delay)
+            t0 = time.perf_counter()
+            resp = await ac.get("/health")
+            elapsed = time.perf_counter() - t0
+            health_durations.append(elapsed)
+            return resp, elapsed
+
+        # Launch screenshot request and concurrent /health requests while OCR is sleeping
+        screenshot_task = asyncio.create_task(run_screenshot())
+        health_task1 = asyncio.create_task(run_health(0.05))
+        health_task2 = asyncio.create_task(run_health(0.10))
+
+        (ss_resp, ss_time), (h1_resp, h1_time), (h2_resp, h2_time) = await asyncio.gather(
+            screenshot_task, health_task1, health_task2
+        )
+
+        assert ss_resp.status_code == 200
+        assert h1_resp.status_code == 200
+        assert h2_resp.status_code == 200
+
+        # /health requests must finish quickly without waiting for the 0.3s OCR to finish
+        assert h1_time < 0.20, f"Health 1 took {h1_time:.3f}s - event loop was blocked!"
+        assert h2_time < 0.20, f"Health 2 took {h2_time:.3f}s - event loop was blocked!"
+        assert ss_time >= 0.28, f"Screenshot finished suspiciously fast: {ss_time:.3f}s"

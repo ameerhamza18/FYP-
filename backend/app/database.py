@@ -14,7 +14,7 @@ change would silently be ignored on an existing database.
 """
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import get_settings
@@ -37,6 +37,13 @@ if not settings.database_url.startswith("sqlite"):
     })
 
 engine = create_engine(settings.database_url, **_engine_kwargs)
+
+if settings.database_url.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -65,7 +72,12 @@ def alembic_config():
     return cfg
 
 
-def run_migrations() -> None:
+REQUIRED_INITIAL_TABLES = {
+    "users", "analyses", "indicators", "se_findings", "campaigns", "audit_logs"
+}
+
+
+def run_migrations(target_engine=None, cfg=None) -> None:
     """Apply every pending migration (``alembic upgrade head``).
 
     Called on startup when ``APP_ENV=production``. A failure here is fatal on
@@ -75,22 +87,34 @@ def run_migrations() -> None:
     from alembic import command
     from sqlalchemy import inspect, text
 
-    cfg = alembic_config()
-    try:
-        with engine.connect() as conn:
-            inspector = inspect(conn)
-            tables = inspector.get_table_names()
-            if "audit_logs" in tables:
-                if "alembic_version" not in tables:
-                    command.stamp(cfg, "b4d7525065b0")
-                else:
-                    res = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
-                    if not res:
-                        command.stamp(cfg, "b4d7525065b0")
-    except Exception:
-        pass
+    active_engine = target_engine or engine
+    active_cfg = cfg or alembic_config()
 
-    command.upgrade(cfg, "head")
+    with active_engine.connect() as conn:
+        inspector = inspect(conn)
+        tables = set(inspector.get_table_names())
+
+        has_version = False
+        if "alembic_version" in tables:
+            res = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
+            if res:
+                has_version = True
+
+        if not has_version and tables:
+            missing = REQUIRED_INITIAL_TABLES - tables
+            present = REQUIRED_INITIAL_TABLES & tables
+            if not missing:
+                # Complete initial schema: stamp b4d7525065b0 so pending migrations apply cleanly
+                command.stamp(active_cfg, "b4d7525065b0")
+            elif present:
+                # Incompatible / partial schema: refuse to silently stamp or mark as up to date
+                raise RuntimeError(
+                    f"Refusing to start: incompatible database schema detected. "
+                    f"Found initial tables {sorted(present)}, but missing required tables {sorted(missing)}. "
+                    f"Database cannot be safely stamped or migrated automatically."
+                )
+
+    command.upgrade(active_cfg, "head")
 
 
 def init_db() -> None:

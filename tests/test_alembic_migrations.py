@@ -135,3 +135,64 @@ def test_notification_migration_lifecycle(temp_alembic_db):
         user_row = conn.execute(text("SELECT email FROM users WHERE id = 1")).fetchone()
         assert user_row is not None
         assert user_row[0] == "mig_test@example.com"
+
+
+def test_incompatible_schema_stamping_rejected(temp_alembic_db):
+    """Verify that a partial / incompatible schema cannot be silently stamped as up to date."""
+    from app.database import run_migrations
+
+    cfg = temp_alembic_db["cfg"]
+    db_url = temp_alembic_db["db_url"]
+    engine = create_engine(db_url)
+
+    # Create only audit_logs table (incompatible schema missing users, analyses, etc.)
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE audit_logs ("
+                "id INTEGER PRIMARY KEY, "
+                "action VARCHAR(64) NOT NULL, "
+                "created_at DATETIME NOT NULL)"
+            )
+        )
+        conn.commit()
+
+    # Attempting to run migrations must fail fast and refuse to stamp
+    with pytest.raises(RuntimeError, match="incompatible database schema detected"):
+        run_migrations(target_engine=engine, cfg=cfg)
+
+    # Ensure alembic_version was NOT silently stamped
+    with engine.connect() as conn:
+        inspector = inspect(conn)
+        tables = inspector.get_table_names()
+        assert "alembic_version" not in tables
+
+
+def test_full_legacy_schema_stamped_and_migrated(temp_alembic_db):
+    """Verify that a genuine legacy database with all 6 initial tables is safely stamped and upgraded."""
+    from app.database import run_migrations, REQUIRED_INITIAL_TABLES
+
+    cfg = temp_alembic_db["cfg"]
+    db_url = temp_alembic_db["db_url"]
+    engine = create_engine(db_url)
+
+    # First upgrade to initial schema b4d7525065b0
+    command.upgrade(cfg, "b4d7525065b0")
+
+    # Drop alembic_version table to simulate a legacy unversioned database with full initial schema
+    with engine.connect() as conn:
+        conn.execute(text("DROP TABLE alembic_version"))
+        conn.commit()
+        inspector = inspect(conn)
+        tables = set(inspector.get_table_names())
+        assert REQUIRED_INITIAL_TABLES.issubset(tables)
+        assert "alembic_version" not in tables
+
+    # run_migrations should detect full legacy schema, stamp b4d7525065b0, and upgrade to head
+    run_migrations(target_engine=engine, cfg=cfg)
+
+    with engine.connect() as conn:
+        inspector = inspect(conn)
+        tables = inspector.get_table_names()
+        assert "notifications" in tables
+        assert "alembic_version" in tables
