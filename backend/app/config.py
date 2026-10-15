@@ -12,20 +12,92 @@ from functools import lru_cache
 from pathlib import Path
 
 
+def _parse_env_line(line: str) -> tuple[str, str] | None:
+    """Parse a single line from a .env file, handling comments and quotes safely."""
+    line = line.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        return None
+    key, _, raw_value = line.partition("=")
+    key = key.strip()
+    if not key:
+        return None
+
+    raw_value = raw_value.strip()
+    # Handle quoted values
+    if raw_value.startswith('"'):
+        end_idx = raw_value.find('"', 1)
+        val = raw_value[1:end_idx] if end_idx != -1 else raw_value[1:]
+    elif raw_value.startswith("'"):
+        end_idx = raw_value.find("'", 1)
+        val = raw_value[1:end_idx] if end_idx != -1 else raw_value[1:]
+    else:
+        # Unquoted: strip trailing inline comments
+        val = raw_value.partition("#")[0].strip()
+
+    return key, val
+
+
+def resolve_dotenv_files() -> list[Path]:
+    """Discover candidate .env file paths in priority order.
+
+    Priority:
+    1. Explicit path from ENV_FILE or DOTENV_PATH environment variable
+    2. Backend directory (.env in trustlayer/backend)
+    3. Repository root (.env in trustlayer/)
+    4. Current working directory (.env)
+    """
+    candidates: list[Path] = []
+
+    explicit = os.environ.get("ENV_FILE") or os.environ.get("DOTENV_PATH")
+    if explicit:
+        candidates.append(Path(explicit).resolve())
+
+    # Backend directory
+    backend_env = Path(__file__).resolve().parents[1] / ".env"
+    candidates.append(backend_env)
+
+    # Repository root
+    repo_root_env = Path(__file__).resolve().parents[2] / ".env"
+    candidates.append(repo_root_env)
+
+    # Current working directory (if distinct)
+    cwd_env = Path.cwd().resolve() / ".env"
+    candidates.append(cwd_env)
+
+    # Return only existing regular files, deduplicated preserving order
+    existing: list[Path] = []
+    seen = set()
+    for p in candidates:
+        try:
+            resolved = p.resolve()
+            if resolved not in seen and resolved.is_file():
+                seen.add(resolved)
+                existing.append(resolved)
+        except OSError:
+            continue
+    return existing
+
+
 def _load_dotenv() -> None:
-    """Load a .env file if python-dotenv is available (dev convenience only)."""
-    env_file = Path(__file__).resolve().parents[1] / ".env"
-    if not env_file.exists():
-        return
-    try:
-        for raw in env_file.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            os.environ.setdefault(key.strip(), value.strip())
-    except OSError:
-        pass
+    """Load configuration from .env files with proper precedence and safe resolution.
+
+    Precedence:
+    1. Pre-existing process environment variables (os.environ) are never overwritten.
+    2. Explicit ENV_FILE / DOTENV_PATH (if defined)
+    3. Backend directory (.env in trustlayer/backend)
+    4. Repository root (.env in trustlayer/)
+    5. Current working directory (.env)
+    """
+    for env_file in resolve_dotenv_files():
+        try:
+            content = env_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in content.splitlines():
+            parsed = _parse_env_line(line)
+            if parsed is not None:
+                key, value = parsed
+                os.environ.setdefault(key, value)
 
 
 _load_dotenv()
@@ -63,7 +135,8 @@ class Settings:
 
     # --- Security / secrets ---
     secret_key: str = field(
-        default_factory=lambda: _env("SECRET_KEY") or secrets.token_urlsafe(48)
+        default_factory=lambda: _env("SECRET_KEY") or secrets.token_urlsafe(48),
+        repr=False,
     )
     jwt_algorithm: str = field(default_factory=lambda: _env("JWT_ALGORITHM", "HS256"))
     access_token_expire_minutes: int = field(
@@ -105,7 +178,8 @@ class Settings:
 
     # --- LLM (Google Gemini) ---
     gemini_api_key: str = field(
-        default_factory=lambda: _env("GEMINI_API_KEY") or _env("GOOGLE_API_KEY", "")
+        default_factory=lambda: _env("GEMINI_API_KEY") or _env("GOOGLE_API_KEY", ""),
+        repr=False,
     )
     gemini_base_url: str = field(
         default_factory=lambda: _env(
@@ -120,7 +194,7 @@ class Settings:
     )
 
     # Backwards-compatibility aliases (deprecated)
-    openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY", ""))
+    openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY", ""), repr=False)
     openai_base_url: str = field(
         default_factory=lambda: _env("OPENAI_BASE_URL", "https://api.openai.com/v1")
     )
@@ -131,7 +205,8 @@ class Settings:
         default_factory=lambda: _env("ADMIN_EMAIL", "admin@trustlayer.com")
     )
     admin_password: str = field(
-        default_factory=lambda: _env("ADMIN_PASSWORD", "Admin@12345")
+        default_factory=lambda: _env("ADMIN_PASSWORD", "Admin@12345"),
+        repr=False,
     )
 
     # --- Encryption at rest (application-layer field encryption) ---
@@ -139,12 +214,49 @@ class Settings:
     # Required in production; derived from SECRET_KEY in development/test.
     # Generate with: python -m app.scripts.generate_key
     field_encryption_key: str = field(
-        default_factory=lambda: _env("FIELD_ENCRYPTION_KEY", "")
+        default_factory=lambda: _env("FIELD_ENCRYPTION_KEY", ""),
+        repr=False,
     )
     # Retired keys kept for decryption during a rotation (comma separated).
     field_encryption_key_old: str = field(
-        default_factory=lambda: _env("FIELD_ENCRYPTION_KEY_OLD", "")
+        default_factory=lambda: _env("FIELD_ENCRYPTION_KEY_OLD", ""),
+        repr=False,
     )
+
+    def __repr__(self) -> str:
+        """Safe representation masking sensitive credentials."""
+        secret_mask = "***" if self.secret_key else ""
+        admin_pw_mask = "***" if self.admin_password else ""
+        gemini_mask = "***" if self.gemini_api_key else ""
+        openai_mask = "***" if self.openai_api_key else ""
+        field_enc_mask = "***" if self.field_encryption_key else ""
+        return (
+            f"Settings("
+            f"app_name={self.app_name!r}, "
+            f"app_env={self.app_env!r}, "
+            f"debug={self.debug!r}, "
+            f"secret_key={secret_mask!r}, "
+            f"database_url={self.database_url!r}, "
+            f"admin_email={self.admin_email!r}, "
+            f"admin_password={admin_pw_mask!r}, "
+            f"gemini_api_key={gemini_mask!r}, "
+            f"openai_api_key={openai_mask!r}, "
+            f"field_encryption_key={field_enc_mask!r})"
+        )
+
+    def to_safe_dict(self) -> dict:
+        """Return non-sensitive configuration parameters for logging/diagnostics."""
+        return {
+            "app_name": self.app_name,
+            "app_env": self.app_env,
+            "debug": self.debug,
+            "database_url": self.database_url,
+            "rate_limit_enabled": self.rate_limit_enabled,
+            "retention_analysis_days": self.retention_analysis_days,
+            "retention_audit_days": self.retention_audit_days,
+            "max_upload_size_mb": self.max_upload_size_mb,
+            "is_production": self.is_production,
+        }
 
     # --- Data retention (storage limitation / GDPR-PDPA) ---
     retention_analysis_days: int = field(

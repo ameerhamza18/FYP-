@@ -340,6 +340,7 @@ def export_audit_logs_csv(limit: int = 5000, db: Session = Depends(get_db), _: U
     import io
     from fastapi.responses import Response
     from app.models import AuditLog
+    from app.security.validation import sanitize_csv_row
 
     limit = max(1, min(limit, 20000))
     logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
@@ -347,7 +348,7 @@ def export_audit_logs_csv(limit: int = 5000, db: Session = Depends(get_db), _: U
     writer = csv.writer(output)
     writer.writerow(["id", "user_id", "action", "resource", "ip", "user_agent", "created_at"])
     for l in logs:
-        writer.writerow([l.id, l.user_id, l.action, l.resource, l.ip, l.user_agent, l.created_at])
+        writer.writerow(sanitize_csv_row([l.id, l.user_id, l.action, l.resource, l.ip, l.user_agent, l.created_at]))
     
     return Response(
         content=output.getvalue(),
@@ -362,6 +363,7 @@ def export_analyses_csv(limit: int = 5000, db: Session = Depends(get_db), _: Use
     import csv
     import io
     from fastapi.responses import Response
+    from app.security.validation import sanitize_csv_row
 
     limit = max(1, min(limit, 20000))
     rows = (
@@ -375,7 +377,7 @@ def export_analyses_csv(limit: int = 5000, db: Session = Depends(get_db), _: Use
     writer = csv.writer(output)
     writer.writerow(["analysis_id", "user_email", "input_type", "risk_score", "risk_level", "threat_type", "campaign_flagged", "created_at"])
     for a, email in rows:
-        writer.writerow([a.id, email, a.input_type, a.risk_score, a.risk_level, a.threat_type, a.campaign_flagged, a.created_at])
+        writer.writerow(sanitize_csv_row([a.id, email, a.input_type, a.risk_score, a.risk_level, a.threat_type, a.campaign_flagged, a.created_at]))
 
     return Response(
         content=output.getvalue(),
