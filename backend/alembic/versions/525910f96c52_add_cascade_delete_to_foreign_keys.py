@@ -21,15 +21,28 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        op.drop_constraint("analyses_user_id_fkey", "analyses", type_="foreignkey")
+        inspector = sa.inspect(bind)
+
+        def get_fk_names(table):
+            return {fk["name"] for fk in inspector.get_foreign_keys(table) if fk.get("name")}
+
+        analyses_fks = get_fk_names("analyses")
+        if "analyses_user_id_fkey" in analyses_fks:
+            op.drop_constraint("analyses_user_id_fkey", "analyses", type_="foreignkey")
         op.create_foreign_key(
             "analyses_user_id_fkey", "analyses", "users", ["user_id"], ["id"], ondelete="CASCADE"
         )
-        op.drop_constraint("indicators_analysis_id_fkey", "indicators", type_="foreignkey")
+
+        indicators_fks = get_fk_names("indicators")
+        if "indicators_analysis_id_fkey" in indicators_fks:
+            op.drop_constraint("indicators_analysis_id_fkey", "indicators", type_="foreignkey")
         op.create_foreign_key(
             "indicators_analysis_id_fkey", "indicators", "analyses", ["analysis_id"], ["id"], ondelete="CASCADE"
         )
-        op.drop_constraint("se_findings_analysis_id_fkey", "se_findings", type_="foreignkey")
+
+        se_fks = get_fk_names("se_findings")
+        if "se_findings_analysis_id_fkey" in se_fks:
+            op.drop_constraint("se_findings_analysis_id_fkey", "se_findings", type_="foreignkey")
         op.create_foreign_key(
             "se_findings_analysis_id_fkey", "se_findings", "analyses", ["analysis_id"], ["id"], ondelete="CASCADE"
         )
@@ -38,15 +51,28 @@ def upgrade() -> None:
 def downgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        op.drop_constraint("se_findings_analysis_id_fkey", "se_findings", type_="foreignkey")
+        inspector = sa.inspect(bind)
+
+        def get_fk_names(table):
+            return {fk["name"] for fk in inspector.get_foreign_keys(table) if fk.get("name")}
+
+        se_fks = get_fk_names("se_findings")
+        if "se_findings_analysis_id_fkey" in se_fks:
+            op.drop_constraint("se_findings_analysis_id_fkey", "se_findings", type_="foreignkey")
         op.create_foreign_key(
             "se_findings_analysis_id_fkey", "se_findings", "analyses", ["analysis_id"], ["id"]
         )
-        op.drop_constraint("indicators_analysis_id_fkey", "indicators", type_="foreignkey")
+
+        indicators_fks = get_fk_names("indicators")
+        if "indicators_analysis_id_fkey" in indicators_fks:
+            op.drop_constraint("indicators_analysis_id_fkey", "indicators", type_="foreignkey")
         op.create_foreign_key(
             "indicators_analysis_id_fkey", "indicators", "analyses", ["analysis_id"], ["id"]
         )
-        op.drop_constraint("analyses_user_id_fkey", "analyses", type_="foreignkey")
+
+        analyses_fks = get_fk_names("analyses")
+        if "analyses_user_id_fkey" in analyses_fks:
+            op.drop_constraint("analyses_user_id_fkey", "analyses", type_="foreignkey")
         op.create_foreign_key(
             "analyses_user_id_fkey", "analyses", "users", ["user_id"], ["id"]
         )
