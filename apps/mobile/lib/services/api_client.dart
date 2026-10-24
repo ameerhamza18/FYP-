@@ -137,12 +137,15 @@ class TrustApiClient {
   }
 
   // ------------------------------------------------------------------ auth
-  /// Mirrors the server-side password policy (backend/app/security/validation.py)
+  /// Mirrors the server-side password policy (backend/app/schemas.py)
   /// so users get instant feedback instead of a round-trip rejection.
   static const int minPasswordLength = 8;
   static const int maxUploadBytes = 8 * 1024 * 1024; // mirrors MAX_UPLOAD_SIZE_MB
 
   static final RegExp _emailRe = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+  static final RegExp _upperRe = RegExp(r'[A-Z]');
+  static final RegExp _lowerRe = RegExp(r'[a-z]');
+  static final RegExp _digitRe = RegExp(r'\d');
 
   static void validateCredentials(String email, String password, {required bool isRegister}) {
     if (!_emailRe.hasMatch(email.trim())) {
@@ -151,8 +154,15 @@ class TrustApiClient {
     if (password.isEmpty) {
       throw ApiException('Enter your password.');
     }
-    if (isRegister && password.length < minPasswordLength) {
-      throw ApiException('Password must be at least $minPasswordLength characters.');
+    if (isRegister) {
+      if (password.length < minPasswordLength) {
+        throw ApiException('Password must be at least $minPasswordLength characters.');
+      }
+      if (!_upperRe.hasMatch(password) ||
+          !_lowerRe.hasMatch(password) ||
+          !_digitRe.hasMatch(password)) {
+        throw ApiException('Password must contain uppercase, lowercase and digits.');
+      }
     }
   }
 
@@ -208,7 +218,23 @@ class TrustApiClient {
     return token;
   }
 
-  Future<void> logout() => TokenStore.clear();
+  /// Revokes the active JWT on the server (best-effort) and clears local storage.
+  Future<void> logout() async {
+    final token = await TokenStore.read();
+    if (token != null) {
+      try {
+        await http
+            .post(
+              Uri.parse('${ApiConfig.baseUrl}/api/auth/logout'),
+              headers: _headers(token),
+            )
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Offline or already expired: proceed with local wipe.
+      }
+    }
+    await TokenStore.clear();
+  }
 
   Future<void> deleteAccount() async {
     final r = await _send(() => http.delete(
@@ -227,15 +253,20 @@ class TrustApiClient {
   /// (mobile number, short code or sender ID). Passing it lets the backend score
   /// sender reputation as well as the message body — spoofed brand sender IDs
   /// and foreign/premium numbers are among the strongest smishing signals.
+  ///
+  /// [clientRequestId] is an optional idempotency key so offline queue retries
+  /// never create duplicate rows on the backend.
   Future<AnalysisResult> analyzeText(
     String text, {
     String source = 'sms',
     String? sender,
+    String? clientRequestId,
   }) async {
     if (text.trim().isEmpty) {
       throw ApiException('Enter the message you want to check.');
     }
     final from = sender?.trim();
+    final reqId = clientRequestId?.trim();
     final r = await _send(() => http.post(
           Uri.parse('${ApiConfig.baseUrl}/api/analyze/text'),
           headers: _headers(await _token()),
@@ -243,20 +274,28 @@ class TrustApiClient {
             'text': text.trim(),
             'source': source,
             if (from != null && from.isNotEmpty) 'sender': from,
+            if (reqId != null && reqId.isNotEmpty) 'client_request_id': reqId,
           }),
         ));
     return AnalysisResult.fromJson(_decode(r) as Map<String, dynamic>);
   }
 
-  Future<AnalysisResult> analyzeUrl(String url) async {
+  Future<AnalysisResult> analyzeUrl(
+    String url, {
+    String? clientRequestId,
+  }) async {
     final trimmed = url.trim();
     if (trimmed.isEmpty) {
       throw ApiException('Enter the link you want to check.');
     }
+    final reqId = clientRequestId?.trim();
     final r = await _send(() => http.post(
           Uri.parse('${ApiConfig.baseUrl}/api/analyze/url'),
           headers: _headers(await _token()),
-          body: jsonEncode({'url': trimmed}),
+          body: jsonEncode({
+            'url': trimmed,
+            if (reqId != null && reqId.isNotEmpty) 'client_request_id': reqId,
+          }),
         ));
     return AnalysisResult.fromJson(_decode(r) as Map<String, dynamic>);
   }
@@ -300,4 +339,3 @@ class TrustApiClient {
     return list.map((e) => AnalysisResult.fromJson(e as Map<String, dynamic>)).toList();
   }
 }
-

@@ -140,7 +140,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     for (final item in batch) {
       if (stopped) break;
       try {
-        await _api.analyzeText(item.text, source: item.source, sender: item.sender);
+        await _api.analyzeText(
+          item.text,
+          source: item.source,
+          sender: item.sender,
+          clientRequestId: item.clientRequestId,
+        );
         checked++;
       } on SessionExpiredException {
         failed.addAll(batch.sublist(checked));
@@ -164,7 +169,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _requeue(List<QueuedAnalysis> items) async {
     for (final item in items) {
-      await AnalysisQueue.add(text: item.text, source: item.source, sender: item.sender);
+      await AnalysisQueue.add(
+        text: item.text,
+        source: item.source,
+        sender: item.sender,
+        clientRequestId: item.clientRequestId,
+      );
     }
   }
 

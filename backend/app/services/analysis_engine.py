@@ -172,8 +172,21 @@ def _persist_campaign(db: Session, analysis: Analysis, campaign_signature: Optio
 def analyze_content(user_id: int, input_type: str, text: str, source: str,
                     db: Session, client_ip: Optional[str] = None,
                     sender: Optional[str] = None,
-                    background_tasks: Optional[BackgroundTasks] = None) -> Analysis:
+                    background_tasks: Optional[BackgroundTasks] = None,
+                    client_request_id: Optional[str] = None) -> Analysis:
     """Execute the full Trust Engine pipeline and persist the result."""
+    clean_req_id = (client_request_id or "").strip()[:64] or None
+    if clean_req_id:
+        existing = (
+            db.query(Analysis)
+            .filter(Analysis.user_id == user_id, Analysis.client_request_id == clean_req_id)
+            .first()
+        )
+        if existing is not None:
+            logger.info("Idempotent analysis hit for user=%d client_request_id=%s → analysis=%d",
+                        user_id, clean_req_id, existing.id)
+            return existing
+
     started = time.perf_counter()
 
     # ---------- 1. Preprocessing ----------
@@ -229,6 +242,7 @@ def analyze_content(user_id: int, input_type: str, text: str, source: str,
         input_type=input_type,
         content_hash=content_hash(text),
         content_snippet=snippet,
+        client_request_id=clean_req_id,
         risk_score=verdict["risk_score"],
         risk_level=verdict["risk_level"],
         threat_type=verdict["threat_type"],
@@ -278,5 +292,3 @@ def analyze_content(user_id: int, input_type: str, text: str, source: str,
     logger.info("Analysis %d (%s) → %s %d/100 in %.1fms",
                 analysis.id, input_type, analysis.risk_level, analysis.risk_score, latency_ms)
     return analysis
-
-

@@ -8,29 +8,36 @@ class QueuedAnalysis {
   final String? sender;
   final String source;
   final int queuedAt;
+  final String clientRequestId;
 
-  const QueuedAnalysis({
+  QueuedAnalysis({
     required this.text,
     required this.source,
     required this.queuedAt,
     this.sender,
-  });
+    String? clientRequestId,
+  }) : clientRequestId = (clientRequestId != null && clientRequestId.trim().isNotEmpty)
+            ? clientRequestId.trim()
+            : 'tlq_${queuedAt}_${text.hashCode.abs()}';
 
   Map<String, dynamic> toJson() => {
         'text': text,
         'sender': sender,
         'source': source,
         'queued_at': queuedAt,
+        'client_request_id': clientRequestId,
       };
 
   static QueuedAnalysis? fromJson(Map<String, dynamic> json) {
     final text = (json['text'] ?? '').toString();
     if (text.trim().isEmpty) return null;
+    final queuedAt = (json['queued_at'] as num?)?.toInt() ?? 0;
     return QueuedAnalysis(
       text: text,
       sender: json['sender']?.toString(),
       source: (json['source'] ?? 'unknown').toString(),
-      queuedAt: (json['queued_at'] as num?)?.toInt() ?? 0,
+      queuedAt: queuedAt,
+      clientRequestId: json['client_request_id']?.toString(),
     );
   }
 }
@@ -75,15 +82,21 @@ class AnalysisQueue {
     required String text,
     required String source,
     String? sender,
+    String? clientRequestId,
   }) async {
     if (text.trim().isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
-    final queue = [...await all(), QueuedAnalysis(
-      text: text,
-      source: source,
-      sender: sender,
-      queuedAt: DateTime.now().millisecondsSinceEpoch,
-    )];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final queue = [
+      ...await all(),
+      QueuedAnalysis(
+        text: text,
+        source: source,
+        sender: sender,
+        queuedAt: now,
+        clientRequestId: clientRequestId,
+      ),
+    ];
     final trimmed = queue.length > _maxEntries
         ? queue.sublist(queue.length - _maxEntries)
         : queue;

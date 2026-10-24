@@ -30,13 +30,32 @@ def _client_ip(request: Request) -> str:
     return "unknown"
 
 
+def _resolve_client_request_id(request: Request, explicit: Optional[str] = None) -> Optional[str]:
+    val = explicit or request.headers.get("x-client-request-id")
+    if not val:
+        return None
+    cleaned = "".join(ch for ch in val if ord(ch) >= 32).strip()[:64]
+    return cleaned or None
+
+
 def _analyze(request: Request, user: User, input_type: str, text: str,
              source: str, db: Session, sender: Optional[str] = None,
-             background_tasks: Optional[BackgroundTasks] = None) -> Analysis:
+             background_tasks: Optional[BackgroundTasks] = None,
+             client_request_id: Optional[str] = None) -> Analysis:
+    req_id = _resolve_client_request_id(request, client_request_id)
+    if req_id:
+        existing = (
+            db.query(Analysis)
+            .filter(Analysis.user_id == user.id, Analysis.client_request_id == req_id)
+            .first()
+        )
+        if existing is not None:
+            return existing
+
     analysis = analyze_content(
         user_id=user.id, input_type=input_type, text=text,
         source=source, db=db, client_ip=_client_ip(request), sender=sender,
-        background_tasks=background_tasks,
+        background_tasks=background_tasks, client_request_id=req_id,
     )
     audit(db, "ANALYZE", user_id=user.id, resource=f"analysis:{analysis.id}",
           ip=_client_ip(request), user_agent=request.headers.get("user-agent"),
@@ -67,14 +86,14 @@ def _analyze(request: Request, user: User, input_type: str, text: str,
     return analysis
 
 
-
 @router.post("/text", response_model=AnalysisDetailOut)
 def analyze_text(payload: AnalyzeTextIn, request: Request,
                  background_tasks: BackgroundTasks,
                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     text = validate_text_payload(payload.text)
     analysis = _analyze(request, user, "text", text, payload.source, db,
-                        background_tasks=background_tasks, sender=payload.sender)
+                        background_tasks=background_tasks, sender=payload.sender,
+                        client_request_id=payload.client_request_id)
     return _detail(db, analysis.id)
 
 
@@ -84,7 +103,8 @@ def analyze_url_endpoint(payload: AnalyzeUrlIn, request: Request,
                          user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     text = validate_text_payload(payload.url)
     analysis = _analyze(request, user, "url", text, "url", db,
-                        background_tasks=background_tasks)
+                        background_tasks=background_tasks,
+                        client_request_id=payload.client_request_id)
     return _detail(db, analysis.id)
 
 
@@ -215,4 +235,3 @@ def export_incident_report(
 def _detail(db: Session, analysis_id: int) -> AnalysisDetailOut:
     analysis = db.query(Analysis).filter(Analysis.id == analysis_id).one()
     return AnalysisDetailOut.model_validate(analysis)
-

@@ -30,7 +30,7 @@ RUN if [ ! -f ml/models/scam_model.joblib ]; then \
         python -m ml.training.generate_dataset && python -m ml.training.train_model; \
     fi
 
-ENV APP_ENV=production DEBUG=false
+ENV APP_ENV=production DEBUG=false WEB_CONCURRENCY=2
 WORKDIR /srv/trustlayer/backend
 
 # Non-root user
@@ -38,4 +38,4 @@ RUN useradd -m appuser && chown -R appuser /srv/trustlayer
 USER appuser
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --workers ${WEB_CONCURRENCY:-2}"]

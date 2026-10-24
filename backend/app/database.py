@@ -66,6 +66,7 @@ def alembic_config():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(alembic_dir))
     cfg.set_main_option("version_locations", str(alembic_dir / "versions"))
+    cfg.set_main_option("path_separator", "os")
     # configparser treats '%' as interpolation, so a URL-encoded password must
     # be escaped before it is handed to Alembic.
     cfg.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))

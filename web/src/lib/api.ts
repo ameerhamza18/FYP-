@@ -167,6 +167,47 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   return (await response.json()) as T;
 }
 
+async function downloadAuthenticatedCsv(endpoint: string, filename: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const token = readStoredToken();
+  const headers = new Headers({ Accept: 'text/csv' });
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+      credentials: 'include',
+    });
+  } catch {
+    throw new ApiError(
+      `Cannot reach the TrustLayer API at ${API_BASE_URL}. Is the backend running?`,
+      0,
+    );
+  }
+
+  if (response.status === 401) {
+    notifyUnauthorized();
+    throw new ApiError('Your session expired. Please sign in again.', 401);
+  }
+
+  if (!response.ok) {
+    throw new ApiError(await parseError(response), response.status);
+  }
+
+  const blob = await response.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
 export const api = {
   auth: {
     /** Returns the created user; sign in separately to obtain a token. */
@@ -182,6 +223,14 @@ export const api = {
         body: { email, password },
         anonymous: true,
       }),
+    refresh: () =>
+      request<TokenResponse>('/auth/refresh', {
+        method: 'POST',
+      }),
+    logout: () =>
+      request<{ status: string; message: string }>('/auth/logout', {
+        method: 'POST',
+      }),
     me: () => request<User>('/auth/me'),
     changePassword: (old_password: string, new_password: string) =>
       request<{ status: string; message: string }>('/auth/password', {
@@ -190,10 +239,23 @@ export const api = {
       }),
   },
   analyze: {
-    text: (text: string, source = 'web') =>
-      request<AnalysisDetail>('/analyze/text', { method: 'POST', body: { text, source } }),
-    url: (url: string) =>
-      request<AnalysisDetail>('/analyze/url', { method: 'POST', body: { url } }),
+    text: (text: string, source = 'web', clientRequestId?: string) =>
+      request<AnalysisDetail>('/analyze/text', {
+        method: 'POST',
+        body: {
+          text,
+          source,
+          ...(clientRequestId ? { client_request_id: clientRequestId } : {}),
+        },
+      }),
+    url: (url: string, clientRequestId?: string) =>
+      request<AnalysisDetail>('/analyze/url', {
+        method: 'POST',
+        body: {
+          url,
+          ...(clientRequestId ? { client_request_id: clientRequestId } : {}),
+        },
+      }),
     /** The multipart field name must match the backend param (`upload`). */
     screenshot: (file: File) => {
       const formData = new FormData();
@@ -241,37 +303,9 @@ export const api = {
       request<{ status: string; message: string }>(`/admin/users/${userId}`, {
         method: 'DELETE',
       }),
-    exportAuditLogsCsv: () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
-      const base = API_BASE_URL.replace(/\/api$/, '');
-      const url = `${base}/api/admin/export/audit-logs/csv`;
-      const a = document.createElement('a');
-      a.href = token ? `${url}?token=${encodeURIComponent(token)}` : url;
-      fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-        .then((r) => r.blob())
-        .then((blob) => {
-          const href = URL.createObjectURL(blob);
-          a.href = href;
-          a.download = 'trustlayer_audit_logs.csv';
-          a.click();
-          URL.revokeObjectURL(href);
-        });
-    },
-    exportAnalysesCsv: () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
-      const base = API_BASE_URL.replace(/\/api$/, '');
-      const url = `${base}/api/admin/export/analyses/csv`;
-      fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-        .then((r) => r.blob())
-        .then((blob) => {
-          const href = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = href;
-          a.download = 'trustlayer_threat_analyses.csv';
-          a.click();
-          URL.revokeObjectURL(href);
-        });
-    },
+    exportAuditLogsCsv: () =>
+      downloadAuthenticatedCsv('/admin/export/audit-logs/csv', 'trustlayer_audit_logs.csv'),
+    exportAnalysesCsv: () =>
+      downloadAuthenticatedCsv('/admin/export/analyses/csv', 'trustlayer_threat_analyses.csv'),
   },
 };
-

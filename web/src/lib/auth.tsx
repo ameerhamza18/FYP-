@@ -35,6 +35,9 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** Refresh active web sessions every 25 minutes (default token TTL is 60 min). */
+const SESSION_REFRESH_INTERVAL_MS = 25 * 60 * 1000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
@@ -87,6 +90,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
   }, []);
 
+  // Sliding session refresh: keep active analysts signed in and renew on tab focus.
+  useEffect(() => {
+    if (!user) return;
+
+    const refreshActiveToken = async () => {
+      if (!readStoredToken()) return;
+      try {
+        const renewed = await api.auth.refresh();
+        storeToken(renewed.access_token);
+      } catch {
+        // 401s are handled by UNAUTHORIZED_EVENT; transient offline errors are ignored.
+      }
+    };
+
+    const intervalId = window.setInterval(refreshActiveToken, SESSION_REFRESH_INTERVAL_MS);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshActiveToken();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [user]);
+
   const signInAndLoad = useCallback(async (email: string, password: string) => {
     const token = await api.auth.login(email, password);
     storeToken(token.access_token);
@@ -111,6 +142,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    if (readStoredToken()) {
+      void api.auth.logout().catch(() => {
+        /* best-effort server-side JTI revocation */
+      });
+    }
     clearSession();
     setUser(null);
   }, []);

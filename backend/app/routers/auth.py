@@ -1,7 +1,7 @@
 """Authentication endpoints: register, login, me.
 
 Security controls: bcrypt hashing, JWT access tokens, login rate limiting,
-audit logging, no user-enumeration-friendly error messages.
+per-account login lockout, audit logging, no user-enumeration-friendly error messages.
 """
 import datetime as dt
 import logging
@@ -15,10 +15,13 @@ from app.schemas import LoginIn, PasswordChangeIn, RegisterIn, TokenOut, UserOut
 from app.security.audit import audit
 from app.security.auth import (
     access_token_ttl_seconds,
+    clear_login_failures,
     create_access_token,
     decode_token,
     get_current_user,
     hash_password,
+    is_account_locked,
+    record_login_failure,
     revoke_token,
     verify_password,
 )
@@ -46,19 +49,39 @@ def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db
 
 @router.post("/login", response_model=TokenOut)
 def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
+    email = payload.email.lower()
+    client_host = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    locked, retry_after = is_account_locked(email)
+    if locked:
+        audit(db, "LOGIN_LOCKED_OUT", resource=email, ip=client_host, user_agent=user_agent,
+              meta={"retry_after_seconds": retry_after})
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Account temporarily locked due to too many failed sign-in attempts. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    user = db.query(User).filter(User.email == email).first()
     if user is None or not verify_password(payload.password, user.password_hash) or not user.is_active:
-        audit(db, "LOGIN_FAILED", resource=payload.email,
-              ip=request.client.host if request.client else None,
-              user_agent=request.headers.get("user-agent"))
+        now_locked, lock_retry = record_login_failure(email)
+        audit(db, "LOGIN_FAILED", resource=email,
+              ip=client_host,
+              user_agent=user_agent,
+              meta={"account_locked": now_locked})
+        if now_locked:
+            audit(db, "LOGIN_LOCKED_OUT", resource=email, ip=client_host, user_agent=user_agent,
+                  meta={"retry_after_seconds": lock_retry})
         # Deliberately vague message (prevents user enumeration).
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
+    clear_login_failures(email)
     user.last_login_at = dt.datetime.now(dt.timezone.utc)
     db.commit()
     audit(db, "LOGIN", user_id=user.id, resource=user.email,
-          ip=request.client.host if request.client else None,
-          user_agent=request.headers.get("user-agent"))
+          ip=client_host,
+          user_agent=user_agent)
     return TokenOut(
         access_token=create_access_token(user),
         role=user.role,
@@ -145,5 +168,3 @@ def delete_me(request: Request, user: User = Depends(get_current_user), db: Sess
     from app.services.retention import delete_user_cascade
     delete_user_cascade(db, user)
     return {"status": "success", "message": f"Account {email} permanently deleted"}
-
-

@@ -4,6 +4,9 @@
 **/venv
 **/.env
 **/node_modules
+**/.next
+**/out
+**/*.tsbuildinfo
 **/*.db
 **/*.sqlite3
 apps/

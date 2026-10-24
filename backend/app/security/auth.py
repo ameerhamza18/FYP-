@@ -60,6 +60,113 @@ def access_token_ttl_seconds() -> int:
 _revoked_jtis: dict[str, float] = {}
 _revocation_lock = threading.Lock()
 
+_login_failures: dict[str, list[float]] = {}
+_lockout_lock = threading.Lock()
+
+
+def is_account_locked(email: str) -> tuple[bool, int]:
+    """Check whether an email account is currently locked out due to failed logins.
+
+    Returns ``(locked, retry_after_seconds)``.
+    """
+    norm = (email or "").strip().lower()
+    if not norm:
+        return False, 0
+    cfg = get_settings()
+    max_failures = max(1, cfg.login_max_failures)
+    window = max(1, cfg.login_lockout_seconds)
+
+    if cfg.redis_url:
+        try:
+            import redis
+            r = redis.Redis.from_url(cfg.redis_url, socket_timeout=1.0)
+            key = f"login_lockout:{norm}"
+            now = time.time()
+            r.zremrangebyscore(key, 0, now - window)
+            count = r.zcard(key)
+            if count >= max_failures:
+                ttl = r.ttl(key)
+                return True, max(1, int(ttl) if ttl and ttl > 0 else window)
+            return False, 0
+        except Exception:
+            pass
+
+    now = time.monotonic()
+    with _lockout_lock:
+        attempts = [t for t in _login_failures.get(norm, []) if now - t < window]
+        if attempts:
+            _login_failures[norm] = attempts
+        else:
+            _login_failures.pop(norm, None)
+        if len(attempts) >= max_failures:
+            oldest_in_window = attempts[-max_failures]
+            retry_after = max(1, int(window - (now - oldest_in_window)))
+            return True, retry_after
+    return False, 0
+
+
+def record_login_failure(email: str) -> tuple[bool, int]:
+    """Record a failed login attempt for ``email`` and return updated ``(locked, retry_after)``."""
+    norm = (email or "").strip().lower()
+    if not norm:
+        return False, 0
+    cfg = get_settings()
+    max_failures = max(1, cfg.login_max_failures)
+    window = max(1, cfg.login_lockout_seconds)
+
+    if cfg.redis_url:
+        try:
+            import redis
+            r = redis.Redis.from_url(cfg.redis_url, socket_timeout=1.0)
+            key = f"login_lockout:{norm}"
+            now = time.time()
+            pipe = r.pipeline()
+            pipe.zremrangebyscore(key, 0, now - window)
+            pipe.zadd(key, {f"{now}:{secrets.token_hex(4)}": now})
+            pipe.expire(key, window)
+            pipe.zcard(key)
+            res = pipe.execute()
+            count = int(res[3])
+            if count >= max_failures:
+                return True, window
+            return False, 0
+        except Exception:
+            pass
+
+    now = time.monotonic()
+    with _lockout_lock:
+        attempts = [t for t in _login_failures.get(norm, []) if now - t < window]
+        attempts.append(now)
+        _login_failures[norm] = attempts
+        if len(attempts) >= max_failures:
+            oldest_in_window = attempts[-max_failures]
+            retry_after = max(1, int(window - (now - oldest_in_window)))
+            return True, retry_after
+    return False, 0
+
+
+def clear_login_failures(email: str) -> None:
+    """Clear failed login counter for ``email`` after a successful sign-in."""
+    norm = (email or "").strip().lower()
+    if not norm:
+        return
+    cfg = get_settings()
+    if cfg.redis_url:
+        try:
+            import redis
+            r = redis.Redis.from_url(cfg.redis_url, socket_timeout=1.0)
+            r.delete(f"login_lockout:{norm}")
+        except Exception:
+            pass
+    with _lockout_lock:
+        _login_failures.pop(norm, None)
+
+
+def reset_login_lockouts() -> None:
+    """Clear all in-memory login failure records (used by test suites)."""
+    with _lockout_lock:
+        _login_failures.clear()
+
 
 def revoke_token(jti: str, ttl_seconds: int = 3600) -> None:
     """Revoke a token JTI until its natural expiry (JTI blocklist)."""

@@ -76,10 +76,16 @@ class NotificationCountOut(BaseModel):
     unread_count: int
 
 
-
 def _sanitize_text(v: str) -> str:
     """Strip control characters (except newlines/tabs) — basic injection hygiene."""
     return "".join(ch for ch in v if ch in ("\n", "\t") or ord(ch) >= 32)
+
+
+def _clean_optional_str(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    cleaned = _sanitize_text(v).strip()
+    return cleaned or None
 
 
 class AnalyzeTextIn(BaseModel):
@@ -88,23 +94,23 @@ class AnalyzeTextIn(BaseModel):
     # Originating address observed by the mobile interceptor (MSISDN, short code
     # or alphanumeric sender ID). Optional: manual pastes have no sender.
     sender: Optional[str] = Field(default=None, max_length=64)
+    # Optional idempotency key from the client (POST retry safety).
+    client_request_id: Optional[str] = Field(default=None, max_length=64)
 
     @field_validator("text")
     @classmethod
     def clean(cls, v: str) -> str:
         return _sanitize_text(v)
 
-    @field_validator("sender")
+    @field_validator("sender", "client_request_id")
     @classmethod
-    def clean_sender(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return None
-        cleaned = _sanitize_text(v).strip()
-        return cleaned or None
+    def clean_optional(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_optional_str(v)
 
 
 class AnalyzeUrlIn(BaseModel):
     url: str = Field(min_length=4, max_length=2048)
+    client_request_id: Optional[str] = Field(default=None, max_length=64)
 
     @field_validator("url")
     @classmethod
@@ -115,6 +121,11 @@ class AnalyzeUrlIn(BaseModel):
         if not _URL_RE.match(v):
             raise ValueError("Invalid URL")
         return _sanitize_text(v)
+
+    @field_validator("client_request_id")
+    @classmethod
+    def clean_request_id(cls, v: Optional[str]) -> Optional[str]:
+        return _clean_optional_str(v)
 
 
 class SEFindingOut(BaseModel):
@@ -136,6 +147,7 @@ class AnalysisOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     input_type: str
+    client_request_id: Optional[str] = None
     risk_score: int
     risk_level: str
     threat_type: str

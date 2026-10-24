@@ -1,4 +1,5 @@
-/// Unit tests for the offline analysis queue (services/analysis_queue.dart).
+/// Unit tests for the offline analysis queue (services/analysis_queue.dart)
+/// and registration credential validation (services/api_client.dart).
 ///
 /// This queue is the reason a scam message intercepted while the phone was
 /// offline still gets analysed later, so losing or corrupting it silently would
@@ -7,6 +8,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trustlayer/services/analysis_queue.dart';
+import 'package:trustlayer/services/api_client.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -20,11 +22,12 @@ void main() {
     expect(await AnalysisQueue.length(), 0);
   });
 
-  test('add() then all() round-trips text, source and sender', () async {
+  test('add() then all() round-trips text, source, sender and clientRequestId', () async {
     await AnalysisQueue.add(
       text: 'Your account will be blocked, verify now',
       source: 'whatsapp',
       sender: '+923001234567',
+      clientRequestId: 'custom-idemp-123',
     );
 
     final queued = await AnalysisQueue.all();
@@ -33,6 +36,18 @@ void main() {
     expect(queued.single.source, 'whatsapp');
     expect(queued.single.sender, '+923001234567');
     expect(queued.single.queuedAt, greaterThan(0));
+    expect(queued.single.clientRequestId, 'custom-idemp-123');
+  });
+
+  test('add() auto-generates a stable clientRequestId when omitted', () async {
+    await AnalysisQueue.add(
+      text: 'Verify your OTP now',
+      source: 'sms',
+    );
+
+    final queued = await AnalysisQueue.all();
+    expect(queued, hasLength(1));
+    expect(queued.single.clientRequestId, startsWith('tlq_'));
   });
 
   test('blank text is ignored rather than queued', () async {
@@ -72,5 +87,22 @@ void main() {
 
     expect(await AnalysisQueue.all(), isEmpty);
     expect(await AnalysisQueue.length(), 0);
+  });
+
+  test('validateCredentials enforces uppercase, lowercase and digit on register', () {
+    expect(
+      () => TrustApiClient.validateCredentials('user@example.com', 'alllowercase1', isRegister: true),
+      throwsA(isA<ApiException>()),
+    );
+    expect(
+      () => TrustApiClient.validateCredentials('user@example.com', 'ALLUPPERCASE1', isRegister: true),
+      throwsA(isA<ApiException>()),
+    );
+    expect(
+      () => TrustApiClient.validateCredentials('user@example.com', 'NoDigitsHere', isRegister: true),
+      throwsA(isA<ApiException>()),
+    );
+    // Valid password succeeds without throwing
+    TrustApiClient.validateCredentials('user@example.com', 'StrongPass1', isRegister: true);
   });
 }

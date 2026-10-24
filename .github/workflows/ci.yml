@@ -7,7 +7,7 @@ on:
 
 jobs:
   backend-tests:
-    name: Backend tests (pytest)
+    name: Backend tests & security self-attack
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,17 @@ jobs:
       - name: Run test suite
         working-directory: backend
         run: python -m pytest ../tests -v
+      - name: Run live ethical self-attack security suite
+        working-directory: backend
+        run: |
+          PYTHONPATH="..:." uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health >/dev/null; then break; fi
+            sleep 1
+          done
+          python ../security/security-tests/run_security_checks.py http://127.0.0.1:8000
+          kill $SERVER_PID || true
 
   web-build:
     name: Web build & type-check

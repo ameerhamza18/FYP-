@@ -9,23 +9,29 @@ Security posture (OWASP API Top 10 alignment):
 - Audit logging of security-relevant events
 - Prompt-injection defenses + LLM output validation in the LLM channel
 - Hardened response headers + fail-fast production configuration checks
+- Optional Sentry error telemetry + automated GDPR/PDPA data retention purge
 """
+import asyncio
+import contextlib
 import logging
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from starlette.concurrency import run_in_threadpool
 
-from app.config import assert_production_ready, get_settings
+from app.config import Settings, assert_production_ready, get_settings
 from app.database import SessionLocal, init_db
 from app.models import User
-from app.routers import admin, analyze, auth
+from app.routers import admin, analyze, auth, notifications
 from app.security.auth import hash_password
 from app.security.rate_limit import RateLimitMiddleware
+from app.services.retention import purge_expired_records
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -36,15 +42,62 @@ settings = get_settings()
 # (repo root, backend/, a container, or a test runner).
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
+RETENTION_CHECK_INTERVAL_SECONDS = 24 * 3600  # 24 hours
+
+
+def init_sentry(cfg: Settings) -> bool:
+    """Initialize Sentry error tracking when SENTRY_DSN is configured."""
+    if not cfg.sentry_dsn:
+        return False
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=cfg.sentry_dsn,
+            traces_sample_rate=cfg.sentry_traces_sample_rate,
+            environment=cfg.app_env,
+            send_default_pii=False,
+        )
+        logger.info("Sentry telemetry initialized (env=%s)", cfg.app_env)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Sentry initialization skipped: %s", exc)
+        return False
+
+
+def _run_retention_once() -> dict:
+    """Execute one data retention purge pass with its own scoped session."""
+    db = SessionLocal()
+    try:
+        return purge_expired_records(db)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Scheduled retention purge encountered an error: %s", exc)
+        return {"status": "error", "detail": str(exc)}
+    finally:
+        db.close()
+
+
+async def _periodic_retention_worker(interval_seconds: int = RETENTION_CHECK_INTERVAL_SECONDS) -> None:
+    """Background loop that purges expired analyses and audit logs every 24h."""
+    while True:
+        await run_in_threadpool(_run_retention_once)
+        await asyncio.sleep(interval_seconds)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Startup/shutdown. Replaces the deprecated @app.on_event hooks."""
     assert_production_ready(settings)
+    init_sentry(settings)
     init_db()
     _bootstrap_admin()
+    retention_task = asyncio.create_task(_periodic_retention_worker())
     logger.info("TrustLayer API ready (env=%s)", settings.app_env)
-    yield
+    try:
+        yield
+    finally:
+        retention_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await retention_task
 
 
 app = FastAPI(
@@ -55,9 +108,6 @@ app = FastAPI(
     redoc_url=None if settings.is_production else "/redoc",
     lifespan=lifespan,
 )
-
-import uuid
-from fastapi.responses import JSONResponse
 
 # --- Middleware LIFO execution: RateLimitMiddleware first, then CORSMiddleware so CORS headers wrap 429s ---
 app.add_middleware(RateLimitMiddleware)
@@ -109,8 +159,6 @@ async def request_id_and_security_headers(request: Request, call_next):
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-from app.routers import notifications
-
 app.include_router(auth.router)
 app.include_router(analyze.router)
 app.include_router(admin.router)
@@ -118,7 +166,6 @@ app.include_router(notifications.router)
 
 
 def _bootstrap_admin() -> None:
-
     """Create the admin account from configured bootstrap secrets (first run)."""
     db = SessionLocal()
     try:
