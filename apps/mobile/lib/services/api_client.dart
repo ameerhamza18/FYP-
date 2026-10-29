@@ -5,6 +5,7 @@ import 'dart:io' show SocketException;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/analysis_result.dart';
 import 'token_store.dart';
@@ -21,11 +22,45 @@ import 'token_store.dart';
 ///
 /// Override at build time without editing this file:
 ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.10:8001
+/// Or override at runtime from the Login screen gear dialog.
 class ApiConfig {
-  static const String baseUrl = String.fromEnvironment(
+  static const String _prefKey = 'tl_api_base_url_override';
+
+  static const String defaultBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2:8001',
   );
+
+  static String? _overrideBaseUrl;
+
+  static String get baseUrl => _overrideBaseUrl ?? defaultBaseUrl;
+
+  /// Loads any runtime server URL override saved from the Login screen.
+  static Future<void> loadOverride() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_prefKey)?.trim();
+      if (saved != null && saved.isNotEmpty) {
+        _overrideBaseUrl = saved.replaceAll(RegExp(r'/+$'), '');
+      }
+    } catch (_) {
+      // Ignore in unit tests without SharedPreferences mock.
+    }
+  }
+
+  /// Saves or clears a runtime server URL override (e.g. http://192.168.1.15:8001).
+  static Future<void> setOverride(String? url) async {
+    final cleaned = url?.trim().replaceAll(RegExp(r'/+$'), '');
+    _overrideBaseUrl = (cleaned != null && cleaned.isNotEmpty) ? cleaned : null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_overrideBaseUrl == null) {
+        await prefs.remove(_prefKey);
+      } else {
+        await prefs.setString(_prefKey, _overrideBaseUrl!);
+      }
+    } catch (_) {}
+  }
 }
 
 class ApiException implements Exception {

@@ -42,6 +42,61 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Future<void> _configureServerUrl() async {
+    final controller = TextEditingController(text: ApiConfig.baseUrl);
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: TrustLayerColors.surfaceElevated,
+        title: Text(
+          'API Server URL',
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: TrustLayerColors.textPrimary,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Enter your PC Wi-Fi IP running Docker on port 8001\n(e.g. http://192.168.1.15:8001):',
+              style: const TextStyle(color: TrustLayerColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.url,
+              style: const TextStyle(color: TrustLayerColors.textPrimary, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'http://192.168.1.15:8001',
+                hintStyle: const TextStyle(color: TrustLayerColors.textMuted),
+                filled: true,
+                fillColor: TrustLayerColors.surface,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(''),
+            child: const Text('Reset Default'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (saved != null) {
+      await ApiConfig.setOverride(saved.isEmpty ? null : saved);
+      if (mounted) setState(() {});
+    }
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     setState(() { _busy = true; _error = null; });
@@ -145,8 +200,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: const TextStyle(color: TrustLayerColors.textPrimary, fontSize: 13.5),
                 decoration: InputDecoration(
                   labelText: 'Operator Identity (Email)',
-                  labelStyle: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 13),
-                  prefixIcon: Icon(Icons.alternate_email_rounded, color: TrustLayerColors.textMuted, size: 20),
+                  labelStyle: const TextStyle(color: TrustLayerColors.textSecondary, fontSize: 13),
+                  prefixIcon: const Icon(Icons.alternate_email_rounded, color: TrustLayerColors.textMuted, size: 20),
                   filled: true,
                   fillColor: TrustLayerColors.surface,
                   enabledBorder: OutlineInputBorder(
@@ -167,8 +222,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 inputFormatters: [FilteringTextInputFormatter.singleLineFormatter],
                 decoration: InputDecoration(
                   labelText: 'Passcode / Cryptographic Token',
-                  labelStyle: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 13),
-                  prefixIcon: Icon(Icons.key_rounded, color: TrustLayerColors.textMuted, size: 20),
+                  labelStyle: const TextStyle(color: TrustLayerColors.textSecondary, fontSize: 13),
+                  prefixIcon: const Icon(Icons.key_rounded, color: TrustLayerColors.textMuted, size: 20),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -255,6 +310,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     letterSpacing: 0.8,
                     fontWeight: FontWeight.w600,
                     color: TrustLayerColors.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _configureServerUrl,
+                icon: const Icon(Icons.settings_ethernet_rounded, size: 14, color: TrustLayerColors.textMuted),
+                label: Text(
+                  'SERVER: ${ApiConfig.baseUrl}',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 10,
+                    color: TrustLayerColors.textMuted,
                   ),
                 ),
               ),

@@ -3,8 +3,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'services/api_client.dart';
 import 'services/token_store.dart';
+import 'widgets/cyber_shield_3d.dart';
 
 class TrustLayerColors {
   static const Color primary = Color(0xFF38BDF8); // Cyan-400
@@ -133,9 +135,6 @@ class _TrustLayerAppState extends State<TrustLayerApp> with WidgetsBindingObserv
   }
 }
 
-import 'screens/onboarding_screen.dart';
-import 'widgets/cyber_shield_3d.dart';
-
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -166,6 +165,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   /// JWT must land the user on sign-in, not on a home screen where every action
   /// fails with 401. If no token, user enters the Onboarding Tour.
   Future<void> _route() async {
+    await ApiConfig.loadOverride();
     // Artificial 1-second delay so splash renders smoothly
     await Future.delayed(const Duration(milliseconds: 1200));
     final token = await TokenStore.read();
