@@ -1,34 +1,35 @@
-"""Deterministic rule engine.
+"""Deterministic 16-rule engine (FR-04).
 
-Encodes expert security knowledge as explainable, weighted rules. This is a
-deliberate defense-in-depth design decision: the deterministic layer catches
-attacks even when the ML model has never seen the pattern (zero-day scam
-templates) and produces human-readable reasons for every decision.
+Encodes expert security knowledge as 16 pre-compiled, explainable, weighted
+regex rules covering English and Roman Urdu fraud patterns (including HBL, UBL,
+Meezan, JazzCash, EasyPaisa, Raast, BISP, Ehsaas, NADRA, FBR, and PTA lures).
 """
 import re
 from typing import Dict, List
+
+from services.nlp.preprocessing import fold_homoglyphs
 
 # Rule: (id, regex, category, threat_type, severity, weight, title)
 RULES: List[Dict] = [
     {
         "id": "R001", "category": "Credential", "threat_type": "Phishing",
         "severity": "CRITICAL", "weight": 25, "title": "Credential request",
-        "pattern": r"\b(enter|provide|share|confirm|update|verify)\s+(your\s+)?(password|pin|otp|cvv|card\s+(number|details)|account\s+(number|details)|login\s+(details|credentials))\b",
+        "pattern": r"\b(enter|provide|share|confirm|update|verify)\s+(your\s+)?(password|pin|otp|cvv|raast\s+pin|card\s+(number|details)|account\s+(number|details)|login\s+(details|credentials))\b",
     },
     {
         "id": "R002", "category": "Urgency", "threat_type": "Phishing",
         "severity": "HIGH", "weight": 15, "title": "Urgency-based pressure",
-        "pattern": r"\b(act\s+now|immediately|within\s+\d+\s*(minutes?|hours?|hrs?)|asap|right\s+away|expires?\s+today|last\s+chance)\b",
+        "pattern": r"\b(act\s+now|immediately|within\s+\d+\s*(minutes?|hours?|hrs?)|asap|right\s+away|expires?\s+today|last\s+chance|fori\s+tor\s+par|foran)\b",
     },
     {
         "id": "R003", "category": "Financial", "threat_type": "Financial Fraud",
         "severity": "CRITICAL", "weight": 25, "title": "Financial impersonation",
-        "pattern": r"\b(bank|atm|debit\s+card|credit\s+card|account)\b.{0,60}\b(blocked|suspended|frozen|limited|deactivated)\b",
+        "pattern": r"\b(bank|atm|debit\s+card|credit\s+card|account|raast\s+id|wallet)\b.{0,60}\b(blocked|suspended|frozen|limited|deactivated)\b",
     },
     {
         "id": "R004", "category": "Financial", "threat_type": "Financial Fraud",
         "severity": "HIGH", "weight": 18, "title": "Upfront payment request",
-        "pattern": r"\b(pay|send|deposit|transfer)\b.{0,40}\b(registration\s+fee|processing\s+fee|advance|security\s+deposit|tax|charges?)\b",
+        "pattern": r"\b(pay|send|deposit|transfer)\b.{0,40}\b(registration\s+fee|processing\s+fee|advance|security\s+deposit|tax|customs\s+duty|charges?)\b",
     },
     {
         "id": "R005", "category": "Employment", "threat_type": "Job Scam",
@@ -48,12 +49,12 @@ RULES: List[Dict] = [
     {
         "id": "R008", "category": "Impersonation", "threat_type": "Impersonation",
         "severity": "HIGH", "weight": 18, "title": "Authority impersonation",
-        "pattern": r"\b(i\s+am\s+calling\s+from|this\s+is\s+.{0,30}(bank|police|fbr|nadra|courier)|from\s+(hbl|ubl|meezan|jazzcash|easypaisa|telenor|jazz|zong|ufone))\b",
+        "pattern": r"\b(i\s+am\s+calling\s+from|this\s+is\s+.{0,30}(bank|sbp|raast|police|fbr|nadra|pta|courier)|from\s+(hbl|ubl|meezan|jazzcash|easypaisa|raast|sadapay|nayapay|telenor|jazz|zong|ufone))\b",
     },
     {
         "id": "R009", "category": "Verification", "threat_type": "Phishing",
         "severity": "HIGH", "weight": 16, "title": "Suspicious verification link",
-        "pattern": r"\b(verify|confirm|reactivate|unlock|restore)\s+(your\s+)?(account|identity|card|number|details|now)\b.{0,60}(link|here|below|http)",
+        "pattern": r"\b(verify|confirm|reactivate|unlock|restore)\s+(your\s+)?(account|raast\s+id|identity|card|number|details|now)\b.{0,60}(link|here|below|http)",
     },
     {
         "id": "R010", "category": "OTPFraud", "threat_type": "Financial Fraud",
@@ -73,42 +74,46 @@ RULES: List[Dict] = [
     {
         "id": "R013", "category": "Impersonation", "threat_type": "Impersonation",
         "severity": "MEDIUM", "weight": 10, "title": "Generic mass-message greeting",
-        "pattern": r"\bdear\s+(customer|valued\s+customer|user|account\s+holder)\b",
+        "pattern": r"\b(dear\s+(customer|valued\s+customer|user|account\s+holder)|mohtaram\s+sarif)\b",
     },
     {
         "id": "R014", "category": "Financial", "threat_type": "Financial Fraud",
         "severity": "HIGH", "weight": 15, "title": "Direct money transfer demand",
-        "pattern": r"\b(send|transfer|deposit)\s+(rs\.?\s?\d|pkr|money|funds)\b",
+        "pattern": r"\b(send|transfer|deposit|bhej\s+dein|bhejen)\s+(rs\.?\s?\d|pkr|money|funds|via\s+raast|on\s+raast)\b",
     },
     {
         "id": "R015", "category": "Financial", "threat_type": "Financial Fraud",
         "severity": "CRITICAL", "weight": 25, "title": "Roman Urdu account blocking threat",
-        "pattern": r"\b(account|card|sim|wallet)\s+(block|band)\s+(ho\s+gaya|kar\s+diya|ho\s+jaega|ho\s+jayega)\b",
+        "pattern": r"\b(account|card|sim|wallet|raast)\s+(block|band)\s+(ho\s+gaya|ho\s+chuka|kar\s+diya|ho\s+jaega|ho\s+jayega)\b",
     },
     {
         "id": "R016", "category": "Reward", "threat_type": "Prize Scam",
-        "severity": "HIGH", "weight": 20, "title": "Roman Urdu lottery/BISP scam bait",
-        "pattern": r"\b(bisp|ehsaas|benazir|inam|lottery)\b.{0,40}\b(jeet|mil\s+gaya|mubarak|paise)\b",
+        "severity": "HIGH", "weight": 20, "title": "Roman Urdu lottery/BISP/Raast scam bait",
+        "pattern": r"\b(bisp|ehsaas|benazir|raast|inam|inaam|lottery)\b.{0,45}\b(jeet|mil\s+gaya|manzoor|wazifa|imdad|mubarak|paise)\b",
     },
 ]
+
+# Pre-compile all 16 regexes once at module import time (FR-04)
+for _rule in RULES:
+    _rule["compiled"] = re.compile(_rule["pattern"], re.I)
 
 SEVERITY_WEIGHT_MULTIPLIER = {"LOW": 0.5, "MEDIUM": 0.75, "HIGH": 1.0, "CRITICAL": 1.2}
 
 
 def run_rules(text: str) -> Dict:
-    """Run deterministic rules over text.
+    """Run the 16 pre-compiled deterministic rules over text.
 
     Returns rule hits, a 0-100 normalized rule score, threat-type votes and
     the highest severity seen.
     """
-    lowered = (text or "").lower()
+    lowered = fold_homoglyphs(text or "").lower()
     hits: List[Dict] = []
     raw_score = 0.0
     threat_votes: Dict[str, int] = {}
     severities = []
 
     for rule in RULES:
-        m = re.search(rule["pattern"], lowered)
+        m = rule["compiled"].search(lowered)
         if m:
             hits.append({
                 "rule_id": rule["id"],
@@ -137,4 +142,3 @@ def run_rules(text: str) -> Dict:
         "highest_severity": order[highest] if highest >= 0 else None,
         "rules_evaluated": len(RULES),
     }
-

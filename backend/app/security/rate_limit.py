@@ -1,8 +1,10 @@
-"""In-memory sliding-window rate limiter (OWASP API4: Resource Consumption).
+"""Token-bucket & sliding-window rate limiters (NFR-03 / OWASP API4).
 
-For a single-node deployment this middleware is sufficient; in multi-node
-production deployments swap the ``_hits`` backend for Redis.
+Enforces per-IP, per-bucket token-bucket rate limiting (default 60 req/min on
+general API routes, stricter limits on /api/analyze and /api/auth/login), with
+optional Redis coordination for multi-node deployments.
 """
+import ipaddress
 import threading
 import time
 import urllib.parse
@@ -19,9 +21,12 @@ settings = get_settings()
 ANALYZE_PATHS = ("/api/analyze",)
 
 
-class SlidingWindowRateLimiter:
+class TokenBucketRateLimiter:
+    """Thread-safe Token Bucket rate limiter (NFR-03) with optional Redis support."""
+
     def __init__(self, redis_url: str = "") -> None:
-        self._hits: Dict[Tuple[str, str], Deque[float]] = defaultdict(deque)
+        # key -> [tokens_remaining, last_refill_monotonic]
+        self._buckets: Dict[Tuple[str, str], list] = {}
         self._lock = threading.Lock()
         self._redis = None
         if redis_url:
@@ -33,9 +38,12 @@ class SlidingWindowRateLimiter:
                 self._redis = None
 
     def allow(self, key: Tuple[str, str], limit: int, window: float = 60.0) -> bool:
+        if limit <= 0:
+            return False
+
         if self._redis is not None:
             try:
-                redis_key = f"rl:{key[0]}:{key[1]}"
+                redis_key = f"tb:{key[0]}:{key[1]}"
                 now = time.time()
                 pipe = self._redis.pipeline()
                 pipe.zremrangebyscore(redis_key, 0, now - window)
@@ -43,11 +51,39 @@ class SlidingWindowRateLimiter:
                 pipe.zadd(redis_key, {f"{now}:{time.perf_counter()}": now})
                 pipe.expire(redis_key, int(window) + 5)
                 res = pipe.execute()
-                count = res[1]
-                return count < limit
+                return res[1] < limit
             except Exception:
-                pass  # Graceful fallback to thread-safe memory deque
+                pass  # Graceful fallback to in-memory token bucket
 
+        now = time.monotonic()
+        refill_rate = float(limit) / max(window, 0.001)
+        with self._lock:
+            state = self._buckets.get(key)
+            if state is None:
+                self._buckets[key] = [float(limit) - 1.0, now]
+                return True
+
+            tokens, last_ts = state
+            elapsed = max(0.0, now - last_ts)
+            tokens = min(float(limit), tokens + elapsed * refill_rate)
+            if tokens < 1.0:
+                state[0] = tokens
+                state[1] = now
+                return False
+
+            state[0] = tokens - 1.0
+            state[1] = now
+            return True
+
+
+class SlidingWindowRateLimiter(TokenBucketRateLimiter):
+    """Backwards-compatible sliding-window limiter preserved for legacy callers."""
+
+    def __init__(self, redis_url: str = "") -> None:
+        super().__init__(redis_url=redis_url)
+        self._hits: Dict[Tuple[str, str], Deque[float]] = defaultdict(deque)
+
+    def allow(self, key: Tuple[str, str], limit: int, window: float = 60.0) -> bool:
         now = time.monotonic()
         with self._lock:
             dq = self._hits[key]
@@ -62,15 +98,12 @@ class SlidingWindowRateLimiter:
 _limiter_singleton = None
 
 
-def get_limiter() -> SlidingWindowRateLimiter:
+def get_limiter() -> TokenBucketRateLimiter:
     global _limiter_singleton
     if _limiter_singleton is None:
-        _limiter_singleton = SlidingWindowRateLimiter(settings.redis_url)
+        _limiter_singleton = TokenBucketRateLimiter(settings.redis_url)
     return _limiter_singleton
 
-
-
-import ipaddress
 
 TRUSTED_PROXIES = {
     ipaddress.ip_network("127.0.0.1/32"),
@@ -98,7 +131,7 @@ def client_ip(request) -> str:
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Applies per-IP, per-window limits; stricter limits on analysis endpoints."""
+    """Applies per-IP token-bucket limits (60 req/min default; stricter on analyze/login)."""
 
     async def dispatch(self, request, call_next) -> Response:
         if not settings.rate_limit_enabled:

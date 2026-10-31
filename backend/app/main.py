@@ -90,6 +90,7 @@ async def lifespan(_: FastAPI):
     init_sentry(settings)
     init_db()
     _bootstrap_admin()
+    _sync_custom_iocs()
     retention_task = asyncio.create_task(_periodic_retention_worker())
     logger.info("TrustLayer API ready (env=%s)", settings.app_env)
     try:
@@ -175,6 +176,17 @@ def _bootstrap_admin() -> None:
                         role="admin"))
             db.commit()
             logger.info("Bootstrap admin created: %s", settings.admin_email)
+    finally:
+        db.close()
+
+
+def _sync_custom_iocs() -> None:
+    """Load persisted SOC custom IOCs into in-memory threat engines on startup."""
+    db = SessionLocal()
+    try:
+        admin.sync_db_iocs_to_memory(db)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Custom IOC sync skipped on startup: %s", exc)
     finally:
         db.close()
 

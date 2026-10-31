@@ -1,34 +1,31 @@
 """Sender-identity reputation intelligence.
 
-Real-world smishing is decided as much by *who* sent the message as by what it
-says. Production anti-scam apps score the sending identity itself: spoofed
-alphanumeric brand IDs, unregistered bulk short codes, foreign premium-rate
-numbers, IDN/homograph sender names and known scam MSISDNs.
-
-The mobile interceptor forwards the originating address it observed, so the
-Trust Engine can fuse sender reputation into the same explainable verdict.
-
-Interface mirrors ``threat_intel``: a pure function returning
-``{"score", "level", "matches", "indicators"}`` with no I/O, so it stays
-testable and swappable for a live reputation feed later.
+Scores sending identities (MSISDNs, short codes, alphanumeric sender IDs) for
+spoofed brands (including HBL, UBL, Meezan, EasyPaisa, JazzCash, Raast, SBP,
+BISP, NADRA, FBR, PTA), homograph sender IDs, foreign/premium-rate prefixes,
+and SOC-managed custom scam sender IOCs.
 """
 import difflib
 import re
+import threading
 from typing import Dict, List, Optional
 
-# Curated scam senders (offline v1 feed — swap for a live reputation API later).
-KNOWN_SCAM_SENDERS: Dict[str, str] = {
+_sender_lock = threading.Lock()
+
+BUILTIN_SCAM_SENDERS: Dict[str, str] = {
     "+441234567890": "Smishing originator — fake bank KYC lure",
     "07001234567": "Premium-rate social-engineering originator",
     "SCAM-ALERT": "Unregistered sender ID used for prize scams",
     "BISPPAKISTAN": "Impersonates BISP — government-grant scam sender ID",
+    "RAAST-REWARD": "Impersonates SBP Raast instant payment service",
 }
 
-# Brands whose identity is routinely spoofed in smishing campaigns.
+KNOWN_SCAM_SENDERS: Dict[str, str] = dict(BUILTIN_SCAM_SENDERS)
+
 IMPERSONATED_BRANDS = (
     "HBL", "UBL", "MCB", "MEEZAN", "ALFALAH", "ASKARI", "FAYSAL",
-    "EASYPAISA", "JAZZCASH", "SADAPAY", "NAYAPAY", "JAZZ", "TELENOR",
-    "UFONE", "ZONG", "NADRA", "PTA", "FBR", "BISP", "EHSAAS",
+    "EASYPAISA", "JAZZCASH", "RAAST", "SBP", "SADAPAY", "NAYAPAY",
+    "JAZZ", "TELENOR", "UFONE", "ZONG", "NADRA", "PTA", "FBR", "BISP", "EHSAAS",
     "PAYPAL", "AMAZON", "NETFLIX", "WHATSAPP", "FACEBOOK", "GOOGLE",
     "MICROSOFT", "APPLE", "BINANCE", "METAMASK", "DARAZ", "STRIPE",
 )
@@ -48,12 +45,37 @@ def _digits_only(value: str) -> str:
     return "".join(ch for ch in value if ch.isdigit())
 
 
-def mask_sender(sender: Optional[str]) -> Optional[str]:
-    """Privacy-preserving form of the sender for persistence/logging.
+def add_scam_sender(sender: str, description: str) -> None:
+    """Dynamically register a malicious sender ID or MSISDN from SOC admin."""
+    cleaned = _normalize(sender)
+    if cleaned:
+        with _sender_lock:
+            KNOWN_SCAM_SENDERS[cleaned] = description
 
-    Full MSISDNs are personal data; only enough is retained to let the user (and
-    an auditor) recognise which sender was scored, e.g. ``+92301***890``.
-    """
+
+def remove_scam_sender(sender: str) -> bool:
+    """Remove a custom sender IOC from the active blocklist."""
+    cleaned = _normalize(sender)
+    with _sender_lock:
+        if cleaned in KNOWN_SCAM_SENDERS and cleaned not in BUILTIN_SCAM_SENDERS:
+            del KNOWN_SCAM_SENDERS[cleaned]
+            return True
+    return False
+
+
+def reset_and_sync_custom_senders(custom_senders: Dict[str, str]) -> None:
+    """Rebuild active scam sender map from built-in seeds + DB custom IOCs."""
+    with _sender_lock:
+        KNOWN_SCAM_SENDERS.clear()
+        KNOWN_SCAM_SENDERS.update(BUILTIN_SCAM_SENDERS)
+        for s, desc in custom_senders.items():
+            cleaned = _normalize(s)
+            if cleaned:
+                KNOWN_SCAM_SENDERS[cleaned] = desc
+
+
+def mask_sender(sender: Optional[str]) -> Optional[str]:
+    """Privacy-preserving form of the sender for persistence/logging."""
     normalized = _normalize(sender)
     if not normalized:
         return None
@@ -66,11 +88,7 @@ def mask_sender(sender: Optional[str]) -> Optional[str]:
 
 
 def _typosquat_of(token: str) -> Optional[str]:
-    """Return the brand a sender ID is imitating, if any.
-
-    Unicode homographs (e.g. Cyrillic ``а`` inside ``JАZZ``) defeat byte
-    equality, so a fuzzy ratio is used rather than a dictionary lookup.
-    """
+    """Return the brand a sender ID is imitating, if any."""
     if len(token) < 4:
         return None
     for brand in IMPERSONATED_BRANDS:
@@ -95,7 +113,6 @@ def check_sender(sender: Optional[str]) -> Dict:
         nonlocal score, negative_found
         score += points
         negative_found = True
-        # Masked value only: the raw MSISDN/sender ID never leaves this module.
         matches.append({"type": kind, "value": mask_sender(normalized),
                         "severity": severity, "description": detail})
         indicators.append({"category": "Sender Reputation", "severity": severity,
@@ -105,10 +122,9 @@ def check_sender(sender: Optional[str]) -> Dict:
         return {"score": 0.0, "level": "LOW", "matches": [], "indicators": [],
                 "sender": None, "sender_masked": None, "provided": False}
 
-    # --- 1. Known-bad sender IOC (highest-confidence signal) ---------------
-    # When the feed already knows this sender, its heuristic category is
-    # irrelevant: the IOC is authoritative and must not be double-counted.
-    known = KNOWN_SCAM_SENDERS.get(normalized)
+    with _sender_lock:
+        known = KNOWN_SCAM_SENDERS.get(normalized)
+
     if known:
         add("sender", "CRITICAL",
             f"Known scam sender: {mask_sender(normalized)}", known, 85.0)
@@ -117,7 +133,6 @@ def check_sender(sender: Optional[str]) -> Dict:
     digits = _digits_only(normalized)
     has_letters = any(ch.isalpha() for ch in normalized)
 
-    # --- 2. Alphanumeric sender ID (brand-spoofing surface) ---------------
     if has_letters:
         if _NON_ASCII.search(normalized):
             add("sender", "HIGH",
@@ -139,10 +154,8 @@ def check_sender(sender: Optional[str]) -> Dict:
                     "Bulk/marketing sender IDs are unverified and can be spoofed; "
                     "treat bank or prize claims from them with caution.", 18.0)
 
-    # --- 3. Numeric senders ------------------------------------------------
     elif digits:
         if _LOCAL_MOBILE.match(normalized):
-            # Ordinary local mobile number: no reputation signal on its own.
             pass
         elif _PREMIUM_RATE.match(normalized):
             add("sender", "HIGH",
@@ -194,4 +207,3 @@ def _summary(normalized: str, score: float, matches: List[Dict],
         "sender_masked": mask_sender(normalized),
         "provided": True,
     }
-

@@ -197,15 +197,32 @@ function CyberGridFloor() {
 }
 
 export default function VectorNodesMap3D({
+  nodes,
+  edges,
   selectedNode,
   onSelectNode,
   className = '',
 }: {
+  nodes?: VectorNode[];
+  edges?: VectorEdge[];
   selectedNode?: VectorNode | null;
   onSelectNode?: (node: VectorNode) => void;
   className?: string;
 }) {
-  const [activeNode, setActiveNode] = useState<VectorNode | null>(selectedNode || DEFAULT_NODES[0]);
+  const resolvedNodes = nodes && nodes.length > 0 ? nodes : DEFAULT_NODES;
+  const resolvedEdges = useMemo(() => {
+    if (edges && edges.length > 0) return edges;
+    if (nodes && nodes.length > 0) {
+      return nodes.slice(1).map((n) => ({
+        from: nodes[0].id,
+        to: n.id,
+        type: n.type,
+      }));
+    }
+    return DEFAULT_EDGES;
+  }, [edges, nodes]);
+
+  const [activeNode, setActiveNode] = useState<VectorNode | null>(selectedNode || resolvedNodes[0]);
 
   const handleSelect = (n: VectorNode) => {
     setActiveNode(n);
@@ -220,7 +237,7 @@ export default function VectorNodesMap3D({
           <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
           VECTOR NODES MAP
         </span>
-        <span className="font-mono text-[9px] text-slate-500">[CORRELATION ACTIVE: 7 NODES]</span>
+        <span className="font-mono text-[9px] text-slate-500">[CORRELATION ACTIVE: {resolvedNodes.length} NODES]</span>
       </div>
 
       <div className="pointer-events-none absolute right-3 top-3 z-10 flex items-center gap-2 text-slate-500">
@@ -234,8 +251,8 @@ export default function VectorNodesMap3D({
         <pointLight position={[0, 3, 0]} intensity={1.5} color="#38bdf8" distance={8} />
 
         <CyberGridFloor />
-        <VectorLines nodes={DEFAULT_NODES} edges={DEFAULT_EDGES} />
-        {DEFAULT_NODES.map((n) => (
+        <VectorLines nodes={resolvedNodes} edges={resolvedEdges} />
+        {resolvedNodes.map((n) => (
           <NodeMesh
             key={n.id}
             node={n}

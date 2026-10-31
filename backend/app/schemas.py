@@ -5,7 +5,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 _URL_RE = re.compile(
-    r"https?://[^\s<>\"']+" , re.IGNORECASE
+    r"https?://[^\s<>\"']+", re.IGNORECASE
 )
 
 
@@ -31,8 +31,6 @@ class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     role: str
-    # Seconds until `access_token` expires. Clients use this to refresh a live
-    # session before the user is cut off mid-analysis, instead of guessing.
     expires_in: int
 
 
@@ -59,6 +57,45 @@ class PasswordChangeIn(BaseModel):
 class AdminUserUpdateIn(BaseModel):
     is_active: Optional[bool] = None
     role: Optional[str] = Field(default=None, pattern="^(user|admin)$")
+
+
+class ThreatIOCIn(BaseModel):
+    ioc_type: str = Field(pattern="^(domain|keyword|sender)$")
+    value: str = Field(min_length=2, max_length=255)
+    severity: str = Field(default="HIGH", pattern="^(MEDIUM|HIGH|CRITICAL)$")
+    description: str = Field(min_length=3, max_length=500)
+
+    @field_validator("value")
+    @classmethod
+    def clean_ioc_value(cls, v: str) -> str:
+        cleaned = "".join(ch for ch in v if ord(ch) >= 32).strip()
+        if not cleaned:
+            raise ValueError("IOC value cannot be blank")
+        return cleaned
+
+
+class ThreatIOCOut(BaseModel):
+    id: Optional[int] = None
+    ioc_type: str
+    value: str
+    severity: str
+    description: str
+    source: str = "custom"  # builtin | custom
+    is_active: bool = True
+    created_at: Optional[object] = None
+
+
+class ThreatIOCBulkSyncIn(BaseModel):
+    items: list[ThreatIOCIn] = Field(min_length=1, max_length=500)
+
+
+class AuditChainVerifyOut(BaseModel):
+    valid: bool
+    checked_count: int
+    total_records: int
+    head_signature: str
+    broken_at_id: Optional[int] = None
+    reason: Optional[str] = None
 
 
 class NotificationOut(BaseModel):
@@ -90,11 +127,8 @@ def _clean_optional_str(v: Optional[str]) -> Optional[str]:
 
 class AnalyzeTextIn(BaseModel):
     text: str = Field(min_length=1, max_length=10000)
-    source: str = Field(default="unknown", max_length=32)  # sms | whatsapp | email | other
-    # Originating address observed by the mobile interceptor (MSISDN, short code
-    # or alphanumeric sender ID). Optional: manual pastes have no sender.
+    source: str = Field(default="unknown", max_length=32)
     sender: Optional[str] = Field(default=None, max_length=64)
-    # Optional idempotency key from the client (POST retry safety).
     client_request_id: Optional[str] = Field(default=None, max_length=64)
 
     @field_validator("text")

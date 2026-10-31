@@ -168,6 +168,7 @@ def get_analysis(analysis_id: int, user: User = Depends(get_current_user),
 @router.get("/{analysis_id}/export-report")
 def export_incident_report(
     analysis_id: int,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -180,6 +181,15 @@ def export_incident_report(
         raise HTTPException(status_code=404, detail="Analysis not found")
     if analysis.user_id != user.id and user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized to view this report")
+
+    audit(
+        db,
+        "EXPORT_INCIDENT_REPORT",
+        user_id=user.id,
+        resource=f"analysis:{analysis.id}",
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
 
     detail = _detail(db, analysis_id)
     created_str = str(analysis.created_at)

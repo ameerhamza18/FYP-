@@ -23,7 +23,6 @@ def _parse_env_line(line: str) -> tuple[str, str] | None:
         return None
 
     raw_value = raw_value.strip()
-    # Handle quoted values
     if raw_value.startswith('"'):
         end_idx = raw_value.find('"', 1)
         val = raw_value[1:end_idx] if end_idx != -1 else raw_value[1:]
@@ -31,40 +30,28 @@ def _parse_env_line(line: str) -> tuple[str, str] | None:
         end_idx = raw_value.find("'", 1)
         val = raw_value[1:end_idx] if end_idx != -1 else raw_value[1:]
     else:
-        # Unquoted: strip trailing inline comments
         val = raw_value.partition("#")[0].strip()
 
     return key, val
 
 
 def resolve_dotenv_files() -> list[Path]:
-    """Discover candidate .env file paths in priority order.
-
-    Priority:
-    1. Explicit path from ENV_FILE or DOTENV_PATH environment variable
-    2. Backend directory (.env in trustlayer/backend)
-    3. Repository root (.env in trustlayer/)
-    4. Current working directory (.env)
-    """
+    """Discover candidate .env file paths in priority order."""
     candidates: list[Path] = []
 
     explicit = os.environ.get("ENV_FILE") or os.environ.get("DOTENV_PATH")
     if explicit:
         candidates.append(Path(explicit).resolve())
 
-    # Backend directory
     backend_env = Path(__file__).resolve().parents[1] / ".env"
     candidates.append(backend_env)
 
-    # Repository root
     repo_root_env = Path(__file__).resolve().parents[2] / ".env"
     candidates.append(repo_root_env)
 
-    # Current working directory (if distinct)
     cwd_env = Path.cwd().resolve() / ".env"
     candidates.append(cwd_env)
 
-    # Return only existing regular files, deduplicated preserving order
     existing: list[Path] = []
     seen = set()
     for p in candidates:
@@ -79,15 +66,7 @@ def resolve_dotenv_files() -> list[Path]:
 
 
 def _load_dotenv() -> None:
-    """Load configuration from .env files with proper precedence and safe resolution.
-
-    Precedence:
-    1. Pre-existing process environment variables (os.environ) are never overwritten.
-    2. Explicit ENV_FILE / DOTENV_PATH (if defined)
-    3. Backend directory (.env in trustlayer/backend)
-    4. Repository root (.env in trustlayer/)
-    5. Current working directory (.env)
-    """
+    """Load configuration from .env files without overwriting os.environ."""
     for env_file in resolve_dotenv_files():
         try:
             content = env_file.read_text(encoding="utf-8")
@@ -160,7 +139,7 @@ class Settings:
         ]
     )
 
-    # --- Rate limiting ---
+    # --- Rate limiting (Token Bucket — NFR-03) ---
     rate_limit_enabled: bool = field(
         default_factory=lambda: _env_bool("RATE_LIMIT_ENABLED", True)
     )
@@ -171,12 +150,12 @@ class Settings:
         default_factory=lambda: _env_int("RATE_LIMIT_DEFAULT_PER_MINUTE", 60)
     )
 
-    # --- Uploads ---
+    # --- Uploads (FR-01) ---
     max_upload_size_mb: int = field(
         default_factory=lambda: _env_int("MAX_UPLOAD_SIZE_MB", 8)
     )
 
-    # --- LLM (Google Gemini) ---
+    # --- LLM (Google Gemini — NFR-01 <= 2.5s budget) ---
     gemini_api_key: str = field(
         default_factory=lambda: _env("GEMINI_API_KEY") or _env("GOOGLE_API_KEY", ""),
         repr=False,
@@ -189,8 +168,8 @@ class Settings:
     gemini_model: str = field(
         default_factory=lambda: _env("GEMINI_MODEL", "gemini-1.5-flash")
     )
-    llm_timeout_seconds: int = field(
-        default_factory=lambda: _env_int("LLM_TIMEOUT_SECONDS", 20)
+    llm_timeout_seconds: float = field(
+        default_factory=lambda: _env_float("LLM_TIMEOUT_SECONDS", 2.0)
     )
 
     # Backwards-compatibility aliases (deprecated)
@@ -209,18 +188,20 @@ class Settings:
         repr=False,
     )
 
-    # --- Encryption at rest (application-layer field encryption) ---
-    # Fernet key(s) protecting free-text personal data before it is persisted.
-    # Required in production; derived from SECRET_KEY in development/test.
-    # Generate with: python -m app.scripts.generate_key
+    # --- Encryption at rest & Zero-Storage Data Minimisation (NFR-02 & FR-10) ---
     field_encryption_key: str = field(
         default_factory=lambda: _env("FIELD_ENCRYPTION_KEY", ""),
         repr=False,
     )
-    # Retired keys kept for decryption during a rotation (comma separated).
     field_encryption_key_old: str = field(
         default_factory=lambda: _env("FIELD_ENCRYPTION_KEY_OLD", ""),
         repr=False,
+    )
+    zero_storage_mode: bool = field(
+        default_factory=lambda: _env_bool("ZERO_STORAGE_MODE", True)
+    )
+    audit_log_append_only: bool = field(
+        default_factory=lambda: _env_bool("AUDIT_LOG_APPEND_ONLY", True)
     )
 
     def __repr__(self) -> str:
@@ -252,6 +233,8 @@ class Settings:
             "debug": self.debug,
             "database_url": self.database_url,
             "rate_limit_enabled": self.rate_limit_enabled,
+            "zero_storage_mode": self.zero_storage_mode,
+            "audit_log_append_only": self.audit_log_append_only,
             "retention_analysis_days": self.retention_analysis_days,
             "retention_audit_days": self.retention_audit_days,
             "max_upload_size_mb": self.max_upload_size_mb,
@@ -275,8 +258,6 @@ class Settings:
     )
 
     # --- Distributed rate limiting (optional; memory backend when unset) ---
-    # Set REDIS_URL to share counters across replicas. The redis package is
-    # installed but only imported when a URL is configured.
     redis_url: str = field(default_factory=lambda: _env("REDIS_URL", ""))
 
     # --- Error tracking (optional) ---
@@ -289,11 +270,9 @@ class Settings:
     campaign_webhook_url: str = field(
         default_factory=lambda: _env("CAMPAIGN_WEBHOOK_URL", "")
     )
-    # Off by default: the alert carries campaign metadata, not message bodies.
     campaign_webhook_include_snippet: bool = field(
         default_factory=lambda: _env_bool("CAMPAIGN_WEBHOOK_INCLUDE_SNIPPET", False)
     )
-
 
     @property
     def max_upload_size_bytes(self) -> int:
@@ -311,7 +290,6 @@ def get_settings() -> Settings:
 
 
 # ------------------------------------------------------- production readiness
-# Values that must never reach a production deployment.
 _INSECURE_SECRET_KEYS = {
     "", "change-me-in-production", "changeme", "secret", "dev", "test",
     "test-secret-key-not-for-production", "your-secret-key",
@@ -323,12 +301,7 @@ _INSECURE_ADMIN_PASSWORDS = {
 
 
 def assert_production_ready(settings: Settings) -> None:
-    """Fail fast when a production deployment is insecurely configured.
-
-    A misconfigured production stack is far more dangerous than one that
-    refuses to boot, so this raises instead of merely logging a warning.
-    Only enforced when APP_ENV=production; development and test are exempt.
-    """
+    """Fail fast when a production deployment is insecurely configured."""
     if not settings.is_production:
         return
 
@@ -359,9 +332,6 @@ def assert_production_ready(settings: Settings) -> None:
     if not settings.rate_limit_enabled:
         problems.append("RATE_LIMIT_ENABLED must stay on in production.")
 
-    # Field-level encryption of persisted message content. Without an explicit
-    # key the data would be encrypted with one derived from SECRET_KEY and a
-    # key rotation would silently make every stored snippet unreadable.
     if not settings.field_encryption_key:
         problems.append(
             "FIELD_ENCRYPTION_KEY must be set (generate with: "
@@ -395,4 +365,3 @@ def assert_production_ready(settings: Settings) -> None:
             + "\n  - ".join(problems)
             + "\nSee .env.example for the required variables."
         )
-

@@ -11,8 +11,10 @@ import type {
   AdminUser,
   Analysis,
   AnalysisDetail,
+  AuditChainVerification,
   AuditLog,
   Campaign,
+  ThreatIOC,
   TokenResponse,
   User,
 } from './types';
@@ -288,6 +290,29 @@ export const api = {
     },
     campaigns: () => request<Campaign[]>('/admin/campaigns'),
     auditLogs: (limit = 50) => request<AuditLog[]>(`/admin/audit-logs?limit=${limit}`),
+    verifyAuditChain: () => request<AuditChainVerification>('/admin/audit-logs/verify'),
+    listIocs: (iocType?: string) =>
+      request<ThreatIOC[]>(
+        iocType ? `/admin/iocs?ioc_type=${encodeURIComponent(iocType)}` : '/admin/iocs',
+      ),
+    addIoc: (payload: {
+      ioc_type: 'domain' | 'keyword' | 'sender';
+      value: string;
+      severity?: string;
+      description?: string;
+    }) =>
+      request<ThreatIOC>('/admin/iocs', {
+        method: 'POST',
+        body: payload,
+      }),
+    syncIocs: () =>
+      request<{ status: string; active_custom_iocs: number }>('/admin/iocs/sync', {
+        method: 'POST',
+      }),
+    deleteIoc: (iocId: number) =>
+      request<{ status: string; deleted_id: number }>(`/admin/iocs/${iocId}`, {
+        method: 'DELETE',
+      }),
     users: () => request<AdminUser[]>('/admin/users'),
     toggleUserStatus: (userId: number, isActive: boolean) =>
       request<{ status: string; is_active: boolean }>(`/admin/users/${userId}/status`, {

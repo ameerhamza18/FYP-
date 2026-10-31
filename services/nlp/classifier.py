@@ -33,6 +33,12 @@ class ScamClassifier:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not load scam model (%s) — rules-only mode", exc)
 
+    def reload(self) -> None:
+        """Reload model artifact from disk after retraining."""
+        self._model = None
+        self.available = False
+        self._try_load()
+
     def predict_proba(self, text: str) -> Optional[float]:
         """Return P(scam) in [0, 1], or None when the model is unavailable."""
         if not self.available or self._model is None:

@@ -320,22 +320,54 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  static const List<String> _canonicalSeCategories = [
+    'Authority',
+    'Urgency',
+    'Fear',
+    'Reward',
+    'Scarcity',
+    'Trust Impersonation',
+    'Financial Pressure',
+    'Credential Harvesting',
+  ];
+
+  int _intensityToPct(String intensity) {
+    switch (intensity.toUpperCase()) {
+      case 'HIGH':
+        return 85;
+      case 'MEDIUM':
+        return 55;
+      case 'LOW':
+        return 25;
+      default:
+        return 0;
+    }
+  }
+
   Widget _buildSocialEngineeringCard() {
-    // If API provided specific techniques, map them; otherwise synthesize standard dimensions
-    final techniques = widget.result.seTechniques.isNotEmpty
-        ? widget.result.seTechniques.map((t) {
-            int pct = 20;
-            if (t.intensity == 'HIGH') pct = 75;
-            if (t.intensity == 'MEDIUM') pct = 45;
-            if (t.intensity == 'LOW') pct = 25;
-            return {'name': t.technique, 'pct': pct, 'intensity': t.intensity};
-          }).toList()
-        : [
-            {'name': 'Authority', 'pct': widget.result.riskScore > 50 ? 30 : 10, 'intensity': 'LOW'},
-            {'name': 'Urgency', 'pct': widget.result.riskScore > 60 ? 40 : 15, 'intensity': 'MEDIUM'},
-            {'name': 'Fear', 'pct': widget.result.riskScore > 75 ? 20 : 5, 'intensity': 'LOW'},
-            {'name': 'Financial Pressure', 'pct': widget.result.riskScore > 70 ? 10 : 5, 'intensity': 'LOW'},
-          ];
+    // FR-05: Rate all 8 SE taxonomy categories across NONE | LOW | MEDIUM | HIGH
+    // without fabricating non-zero bars on benign messages.
+    final Map<String, String> byName = {
+      for (final name in _canonicalSeCategories) name: 'NONE',
+    };
+
+    if (widget.result.seTaxonomy.isNotEmpty) {
+      for (final item in widget.result.seTaxonomy) {
+        byName[item.technique] = item.intensity.toUpperCase();
+      }
+    } else if (widget.result.seTechniques.isNotEmpty) {
+      for (final item in widget.result.seTechniques) {
+        byName[item.technique] = item.intensity.toUpperCase();
+      }
+    }
+
+    final techniques = byName.entries
+        .map((e) => {
+              'name': e.key,
+              'intensity': e.value,
+              'pct': _intensityToPct(e.value),
+            })
+        .toList();
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -365,7 +397,7 @@ class _ResultScreenState extends State<ResultScreen> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'NLP VECTOR',
+                  '8-CATEGORY TAXONOMY',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 8.5,
                     fontWeight: FontWeight.bold,
@@ -379,13 +411,17 @@ class _ResultScreenState extends State<ResultScreen> {
           ...techniques.asMap().entries.map((entry) {
             final idx = entry.key;
             final t = entry.value;
-            Color barColor = const Color(0xFF38BDF8); // Cyan
-            if (idx == 0) barColor = const Color(0xFF3B82F6); // Blue Authority
-            if (idx == 1) barColor = const Color(0xFF06B6D4); // Cyan Urgency
-            if (idx == 2) barColor = const Color(0xFFF59E0B); // Amber Fear
-            if (idx >= 3) barColor = const Color(0xFFEF4444); // Red Financial Pressure
-
+            final intensity = t['intensity'] as String;
             final pct = t['pct'] as int;
+
+            Color barColor = const Color(0xFF475569);
+            if (intensity == 'HIGH') {
+              barColor = const Color(0xFFEF4444);
+            } else if (intensity == 'MEDIUM') {
+              barColor = const Color(0xFFF59E0B);
+            } else if (intensity == 'LOW') {
+              barColor = idx.isEven ? const Color(0xFF3B82F6) : const Color(0xFF06B6D4);
+            }
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -395,20 +431,22 @@ class _ResultScreenState extends State<ResultScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        t['name'] as String,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: TrustLayerColors.textSecondary,
-                          fontWeight: FontWeight.w500,
+                      Expanded(
+                        child: Text(
+                          t['name'] as String,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: TrustLayerColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                       Text(
-                        '$pct%',
+                        '$intensity · $pct%',
                         style: GoogleFonts.jetBrainsMono(
-                          fontSize: 11.5,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: intensity == 'NONE' ? TrustLayerColors.textMuted : Colors.white,
                         ),
                       ),
                     ],

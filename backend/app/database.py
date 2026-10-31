@@ -1,20 +1,7 @@
-"""Database engine, session factory, base model and schema bootstrap.
-
-Development uses SQLite by default; production must point DATABASE_URL at
-PostgreSQL. Encryption at rest for persisted message content is performed by the
-application before rows are written — see ``app.security.crypto`` and the column
-mappings in ``app.models``.
-
-Schema management
------------------
-Production applies the Alembic migration chain (``alembic upgrade head``), which
-is versioned, reviewable and reversible. ``Base.metadata.create_all()`` remains
-a development/test convenience only: it cannot express an ``ALTER``, so a model
-change would silently be ignored on an existing database.
-"""
+"""Database engine, session factory, base model and schema bootstrap."""
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import get_settings
@@ -67,8 +54,6 @@ def alembic_config():
     cfg.set_main_option("script_location", str(alembic_dir))
     cfg.set_main_option("version_locations", str(alembic_dir / "versions"))
     cfg.set_main_option("path_separator", "os")
-    # configparser treats '%' as interpolation, so a URL-encoded password must
-    # be escaped before it is handed to Alembic.
     cfg.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
     return cfg
 
@@ -79,14 +64,8 @@ REQUIRED_INITIAL_TABLES = {
 
 
 def run_migrations(target_engine=None, cfg=None) -> None:
-    """Apply every pending migration (``alembic upgrade head``).
-
-    Called on startup when ``APP_ENV=production``. A failure here is fatal on
-    purpose: serving traffic against a schema the code does not expect is worse
-    than not starting.
-    """
+    """Apply every pending migration (``alembic upgrade head``)."""
     from alembic import command
-    from sqlalchemy import inspect, text
 
     active_engine = target_engine or engine
     active_cfg = cfg or alembic_config()
@@ -105,10 +84,8 @@ def run_migrations(target_engine=None, cfg=None) -> None:
             missing = REQUIRED_INITIAL_TABLES - tables
             present = REQUIRED_INITIAL_TABLES & tables
             if not missing:
-                # Complete initial schema: stamp b4d7525065b0 so pending migrations apply cleanly
                 command.stamp(active_cfg, "b4d7525065b0")
             elif present:
-                # Incompatible / partial schema: refuse to silently stamp or mark as up to date
                 raise RuntimeError(
                     f"Refusing to start: incompatible database schema detected. "
                     f"Found initial tables {sorted(present)}, but missing required tables {sorted(missing)}. "
@@ -116,6 +93,22 @@ def run_migrations(target_engine=None, cfg=None) -> None:
                 )
 
     command.upgrade(active_cfg, "head")
+
+
+def _ensure_dev_columns(target_engine) -> None:
+    """Idempotently backfill newly added columns on pre-existing local SQLite dev DBs."""
+    with target_engine.begin() as conn:
+        inspector = inspect(conn)
+        if "audit_logs" in inspector.get_table_names():
+            cols = {c["name"] for c in inspector.get_columns("audit_logs")}
+            if "prev_hash" not in cols:
+                conn.execute(
+                    text("ALTER TABLE audit_logs ADD COLUMN prev_hash VARCHAR(64) NOT NULL DEFAULT '0000000000000000000000000000000000000000000000000000000000000000'")
+                )
+            if "hmac_signature" not in cols:
+                conn.execute(
+                    text("ALTER TABLE audit_logs ADD COLUMN hmac_signature VARCHAR(64) NOT NULL DEFAULT ''")
+                )
 
 
 def init_db() -> None:
@@ -127,4 +120,4 @@ def init_db() -> None:
     from app import models  # noqa: F401  (register mappers)
 
     Base.metadata.create_all(bind=engine)
-
+    _ensure_dev_columns(engine)

@@ -33,6 +33,7 @@ class AnalysisResult {
   final bool campaignFlagged;
   final List<Indicator> indicators;
   final List<SETechnique> seTechniques;
+  final List<SETechnique> seTaxonomy;
 
   AnalysisResult({
     this.id,
@@ -51,28 +52,39 @@ class AnalysisResult {
     this.campaignFlagged = false,
     this.indicators = const [],
     this.seTechniques = const [],
+    this.seTaxonomy = const [],
   });
 
-  factory AnalysisResult.fromJson(Map<String, dynamic> j) => AnalysisResult(
-        id: j['id'] as int?,
-        inputType: (j['input_type'] ?? 'text') as String,
-        riskScore: (j['risk_score'] as num?)?.toInt() ?? 0,
-        riskLevel: (j['risk_level'] ?? 'LOW') as String,
-        threatType: (j['threat_type'] ?? '') as String,
-        recommendation: (j['recommendation'] ?? '') as String,
-        explanation: (j['explanation'] ?? '') as String,
-        explanationSource: (j['explanation_source'] ?? 'rules') as String,
-        mlScore: (j['ml_score'] as num?)?.toDouble(),
-        ruleScore: (j['rule_score'] as num?)?.toDouble(),
-        intelScore: (j['intel_score'] as num?)?.toDouble(),
-        urlScore: (j['url_score'] as num?)?.toDouble(),
-        latencyMs: (j['latency_ms'] as num?)?.toDouble(),
-        campaignFlagged: (j['campaign_flagged'] ?? false) as bool,
-        indicators: (j['indicators'] as List<dynamic>? ?? [])
-            .map((e) => Indicator.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        seTechniques: (j['se_techniques'] as List<dynamic>? ?? [])
-            .map((e) => SETechnique.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+  factory AnalysisResult.fromJson(Map<String, dynamic> j) {
+    final breakdown = j['engine_breakdown'];
+    final rawTaxonomy = (breakdown is Map<String, dynamic>)
+        ? (breakdown['se_taxonomy'] as List<dynamic>? ?? const [])
+        : const [];
+
+    return AnalysisResult(
+      id: j['id'] as int?,
+      inputType: (j['input_type'] ?? 'text') as String,
+      riskScore: (j['risk_score'] as num?)?.toInt() ?? 0,
+      riskLevel: (j['risk_level'] ?? 'LOW') as String,
+      threatType: (j['threat_type'] ?? '') as String,
+      recommendation: (j['recommendation'] ?? '') as String,
+      explanation: (j['explanation'] ?? '') as String,
+      explanationSource: (j['explanation_source'] ?? 'rules') as String,
+      mlScore: (j['ml_score'] as num?)?.toDouble(),
+      ruleScore: (j['rule_score'] as num?)?.toDouble(),
+      intelScore: (j['intel_score'] as num?)?.toDouble(),
+      urlScore: (j['url_score'] as num?)?.toDouble(),
+      latencyMs: (j['latency_ms'] as num?)?.toDouble(),
+      campaignFlagged: (j['campaign_flagged'] ?? false) as bool,
+      indicators: (j['indicators'] as List<dynamic>? ?? [])
+          .map((e) => Indicator.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      seTechniques: (j['se_techniques'] as List<dynamic>? ?? [])
+          .map((e) => SETechnique.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      seTaxonomy: rawTaxonomy
+          .map((e) => SETechnique.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 }

@@ -1,9 +1,10 @@
-"""URL risk analyzer.
+"""URL risk analyzer (FR-03).
 
-Performs deterministic, explainable URL analysis — no live network requests
-are required (safe-by-default; live reputation feeds can be plugged into
-``threat_intel``). Detects IP-literal hosts, punycode tricks, suspicious
-TLDs, shorteners, brand impersonation, typosquatting and more.
+Performs deterministic, explainable static URL analysis — no live network
+requests are ever issued (SSRF-safe by design; Out-of-Scope #3). Detects
+IP-literal hosts, plain HTTP, risky TLDs, URL shorteners, punycode IDN tricks,
+brand impersonation (including Pakistani banks, EasyPaisa, JazzCash, Raast/SBP,
+NADRA, FBR, Daraz), Levenshtein typosquatting, excessive subdomains, and more.
 """
 import ipaddress
 import re
@@ -21,11 +22,11 @@ SHORTENERS = {
 BRAND_DOMAINS = {
     "paypal.com", "google.com", "facebook.com", "whatsapp.com", "apple.com",
     "microsoft.com", "amazon.com", "netflix.com", "hbl.com", "ubl.com.pk",
-    "meezanbank.com", "jazzcash.com.pk", "easypaisa.com.pk", "nadra.gov.pk",
-    "fbr.gov.pk", "daraz.pk", "telenor.com.pk", "zong.com.pk",
+    "meezanbank.com", "jazzcash.com.pk", "easypaisa.com.pk", "sbp.org.pk",
+    "nadra.gov.pk", "fbr.gov.pk", "daraz.pk", "telenor.com.pk", "zong.com.pk",
 }
 BRAND_KEYWORDS = [
-    "paypal", "jazzcash", "easypaisa", "hbl", "ubl", "meezan", "nadra",
+    "paypal", "jazzcash", "easypaisa", "raast", "hbl", "ubl", "meezan", "nadra",
     "fbr", "daraz", "netflix", "facebook", "whatsapp", "apple", "icloud",
     "google", "amazon", "microsoft", "outlook", "gmail",
 ]
@@ -53,7 +54,7 @@ def _registered_domain(host: str) -> str:
 
 
 def analyze_url(url: str) -> Dict:
-    """Analyze a URL and return score (0-100), indicators and features."""
+    """Analyze a URL statically and return score (0-100), indicators and features."""
     indicators: List[Dict] = []
     url = (url or "").strip()
     if not url:
@@ -151,10 +152,9 @@ def analyze_url(url: str) -> Dict:
         add("MEDIUM", "Non-standard port", f"URL targets port {parsed.port}.", 10)
 
     # --- Credential-themed path keywords ---
-    if re.search(r"(login|verify|secure|update|account|confirm|signin|webscr|banking)", path):
+    if re.search(r"(login|verify|secure|update|account|confirm|signin|webscr|banking|raast)", path):
         add("MEDIUM", "Credential-themed path",
             "Path contains credential-harvesting keywords.", 10)
 
     score = min(100.0, score)
     return {"score": round(score, 1), "indicators": indicators, "features": {"host": host, "tld": tld}}
-

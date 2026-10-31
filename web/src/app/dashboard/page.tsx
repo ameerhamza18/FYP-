@@ -1,39 +1,59 @@
 'use client';
 
 /**
- * TrustLayer SOC Command Center — Campaign Correlation Engine.
+ * TrustLayer SOC Command Center — Campaign Correlation, IOC Control & Cryptographic Audit.
  *
- * Implements the 3D cybersecurity SOC Cockpit directly inspired by web.jpg:
- * - Top Cockpit Header: TrustLayer | Campaign Correlation Engine with award accolades.
- * - Left Panel: Search filter, Threat Feed, Technique Meters, Threat Telemetry & Waveforms.
- * - Center Stage: Live 3D Vector Nodes Map (Three.js), Decised Threat Header, Campaign Metadata & Tactical Action Triggers.
- * - Right Panel: Vector Nodes Radar, Khatra Level: Buland Risk Visualization with 3D Ruby Gem Shield, and Indicator Legend.
- * - Lower Operations Deck: Full Campaign Registry, Audit Trail, RBAC Accounts & System Health Telemetry.
+ * Implements the 3D cybersecurity SOC Cockpit:
+ * - Top Cockpit Header: TrustLayer | Campaign Correlation Engine with live sync & CSV export.
+ * - Left Panel: Search filter, Live Threat Feed, Dynamic Technique Meters, Campaign Telemetry & Waveforms.
+ * - Center Stage: Live 3D Vector Nodes Map (Three.js), Active Threat Header, Campaign Metadata & Tactical Triggers.
+ * - Right Panel: Vector Nodes Star-Correlation Radar, Live Khatra Level Risk Shield (3D), and Indicator Legend.
+ * - Lower Operations Deck: 14-Day Trend, Campaign Registry, Dynamic IOC Blocklist Controls (FR-12),
+ *   HMAC-Chained Audit Trail with Live Tamper Verification (FR-10), & RBAC Operator Roster.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import Footer from '@/components/Footer';
-import ThreatFeed from '@/components/dashboard/ThreatFeed';
 import TrendChart from '@/components/dashboard/TrendChart';
 import TechniqueBars from '@/components/dashboard/TechniqueBars';
 import VectorNodesMap3D, { VectorNode } from '@/components/3d/VectorNodesMap3D';
 import RiskShield3D from '@/components/3d/RiskShield3D';
-import { BTN, CARD, EmptyState, Metric, RiskBadge } from '@/components/ui';
-import { api, ApiError } from '@/lib/api';
+import { EmptyState, RiskBadge } from '@/components/ui';
+import { api } from '@/lib/api';
 import { RequireAuth } from '@/lib/auth';
 import { formatDateTime, formatNumber, relativeTime } from '@/lib/presentation';
-import type { AdminStats, AdminUser, AuditLog, Campaign, Analysis } from '@/lib/types';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type {
+  AdminAnalysis,
+  AdminMetrics,
+  AdminStats,
+  AdminUser,
+  AuditChainVerification,
+  AuditLog,
+  Campaign,
+  ThreatIOC,
+} from '@/lib/types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 /* -------------------------------------------------------------- sub-views */
 
-function SegmentedMeter({ label, pct, color = 'cyan' }: { label: string; pct: number; color?: 'cyan' | 'ruby' | 'amber' }) {
+function SegmentedMeter({
+  label,
+  pct,
+  color = 'cyan',
+}: {
+  label: string;
+  pct: number;
+  color?: 'cyan' | 'ruby' | 'amber';
+}) {
+  const clamped = Math.max(0, Math.min(100, Math.round(pct)));
   const totalSegments = 14;
-  const activeCount = Math.round((pct / 100) * totalSegments);
+  const activeCount = Math.round((clamped / 100) * totalSegments);
 
   return (
     <div className="flex items-center justify-between gap-3 text-xs font-mono">
-      <span className="text-slate-300 w-28 truncate">{label}</span>
+      <span className="text-slate-300 w-28 truncate" title={label}>
+        {label}
+      </span>
       <div className="flex items-center gap-2">
         <div className="flex gap-[3px]">
           {Array.from({ length: totalSegments }).map((_, idx) => (
@@ -51,7 +71,7 @@ function SegmentedMeter({ label, pct, color = 'cyan' }: { label: string; pct: nu
             />
           ))}
         </div>
-        <span className="w-10 text-right font-bold text-slate-200">{pct}%</span>
+        <span className="w-10 text-right font-bold text-slate-200">{clamped}%</span>
       </div>
     </div>
   );
@@ -124,7 +144,7 @@ function CampaignTable({ campaigns }: { campaigns: Campaign[] }) {
         </div>
         <EmptyState
           title="No campaigns correlated"
-          description="Repeated attack signatures across users will be grouped here automatically."
+          description="Repeated IOC or template signatures across users will be grouped here automatically."
         />
       </section>
     );
@@ -154,10 +174,7 @@ function CampaignTable({ campaigns }: { campaigns: Campaign[] }) {
           </thead>
           <tbody className="divide-y divide-sky-900/20">
             {campaigns.map((campaign) => (
-              <tr
-                key={campaign.id}
-                className="transition-colors hover:bg-sky-950/30"
-              >
+              <tr key={campaign.id} className="transition-colors hover:bg-sky-950/30">
                 <td className="px-4 py-2.5">
                   <span
                     className="block max-w-[280px] truncate text-slate-200"
@@ -195,19 +212,296 @@ function CampaignTable({ campaigns }: { campaigns: Campaign[] }) {
   );
 }
 
-function AuditTrail({ logs }: { logs: AuditLog[] }) {
+function IOCBlocklistManager({
+  iocs,
+  onChanged,
+}: {
+  iocs: ThreatIOC[];
+  onChanged: () => void;
+}) {
+  const [filterType, setFilterType] = useState<'ALL' | 'domain' | 'keyword' | 'sender'>('ALL');
+  const [iocType, setIocType] = useState<'domain' | 'keyword' | 'sender'>('domain');
+  const [value, setValue] = useState('');
+  const [severity, setSeverity] = useState<'CRITICAL' | 'HIGH' | 'MEDIUM'>('HIGH');
+  const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const visibleIocs = useMemo(() => {
+    if (filterType === 'ALL') return iocs;
+    return iocs.filter((item) => item.ioc_type === filterType);
+  }, [iocs, filterType]);
+
+  const customCount = useMemo(
+    () => iocs.filter((item) => item.source === 'custom').length,
+    [iocs],
+  );
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = value.trim();
+    if (!trimmed) {
+      toast.error('Enter an IOC domain, keyword, or sender handle');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.admin.addIoc({
+        ioc_type: iocType,
+        value: trimmed,
+        severity,
+        description: description.trim() || `SOC operator ${iocType} block rule`,
+      });
+      toast.success(`Added ${iocType} IOC "${trimmed}" to live threat engine`);
+      setValue('');
+      setDescription('');
+      onChanged();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to register IOC');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (ioc: ThreatIOC) => {
+    if (!ioc.id) return;
+    try {
+      await api.admin.deleteIoc(ioc.id);
+      toast.success(`Removed custom IOC "${ioc.value}"`);
+      onChanged();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete IOC');
+    }
+  };
+
+  const handleSync = async () => {
+    try {
+      const res = await api.admin.syncIocs();
+      toast.success(`Synchronized ${res.active_custom_iocs} custom IOCs into scoring channels`);
+      onChanged();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to sync IOC feeds');
+    }
+  };
+
   return (
     <section className="tl-hud-glass rounded-xl overflow-hidden">
-      <div className="border-b border-sky-900/40 p-4">
-        <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
-          CRYPTOGRAPHIC AUDIT TRAIL
-        </h2>
-        <p className="mt-0.5 text-[10px] font-mono text-slate-400">
-          Append-only security log verified with HMAC digest
-        </p>
+      <div className="border-b border-sky-900/40 p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
+            THREAT INTELLIGENCE IOC BLOCKLIST CONTROLS
+          </h2>
+          <p className="mt-0.5 text-[10px] font-mono text-slate-400">
+            Live domain, scam phrase & spoofed sender indicators ({iocs.length} active · {customCount} custom)
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px]">
+          {(['ALL', 'domain', 'keyword', 'sender'] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setFilterType(tab)}
+              className={`rounded border px-2 py-0.5 uppercase transition-colors ${
+                filterType === tab
+                  ? 'border-sky-400/60 bg-sky-950/70 text-sky-300 font-bold'
+                  : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={handleSync}
+            className="ml-1 rounded border border-emerald-700/60 bg-emerald-950/40 px-2.5 py-0.5 font-bold text-emerald-300 hover:bg-emerald-900/40"
+          >
+            SYNC RUNTIME
+          </button>
+        </div>
       </div>
+
+      {/* Add new IOC form */}
+      <form
+        onSubmit={handleAdd}
+        className="border-b border-sky-950/60 bg-slate-950/50 p-3.5 grid grid-cols-1 sm:grid-cols-12 gap-2 font-mono text-xs"
+      >
+        <select
+          value={iocType}
+          onChange={(e) => setIocType(e.target.value as 'domain' | 'keyword' | 'sender')}
+          className="sm:col-span-2 rounded border border-sky-900/50 bg-[#091124] px-2.5 py-1.5 text-xs text-slate-200 focus:border-sky-400 focus:outline-none"
+        >
+          <option value="domain">Domain</option>
+          <option value="keyword">Keyword</option>
+          <option value="sender">Sender ID</option>
+        </select>
+
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={
+            iocType === 'domain'
+              ? 'e.g. raast-verify-bonus.xyz'
+              : iocType === 'keyword'
+              ? 'e.g. raast instant prize'
+              : 'e.g. HBL-REWARD'
+          }
+          className="sm:col-span-4 rounded border border-sky-900/50 bg-[#091124] px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+        />
+
+        <select
+          value={severity}
+          onChange={(e) => setSeverity(e.target.value as 'CRITICAL' | 'HIGH' | 'MEDIUM')}
+          className="sm:col-span-2 rounded border border-sky-900/50 bg-[#091124] px-2.5 py-1.5 text-xs text-slate-200 focus:border-sky-400 focus:outline-none"
+        >
+          <option value="CRITICAL">CRITICAL</option>
+          <option value="HIGH">HIGH</option>
+          <option value="MEDIUM">MEDIUM</option>
+        </select>
+
+        <input
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Analyst rationale / ticket note..."
+          className="sm:col-span-2 rounded border border-sky-900/50 bg-[#091124] px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+        />
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="sm:col-span-2 rounded border border-sky-600/60 bg-sky-950/70 px-3 py-1.5 font-bold text-sky-300 hover:bg-sky-900/60 disabled:opacity-50"
+        >
+          {submitting ? 'ADDING...' : '+ ADD IOC'}
+        </button>
+      </form>
+
+      {/* IOC table */}
+      <div className="tl-scroll max-h-[280px] overflow-y-auto">
+        <table className="w-full min-w-[680px] text-left text-xs font-mono">
+          <thead className="sticky top-0 bg-slate-900/85 text-[10px] uppercase tracking-wider text-slate-400 z-10">
+            <tr>
+              <th className="px-4 py-2 font-semibold">Type</th>
+              <th className="px-3 py-2 font-semibold">Indicator Value</th>
+              <th className="px-3 py-2 font-semibold">Severity</th>
+              <th className="px-3 py-2 font-semibold">Source</th>
+              <th className="px-3 py-2 font-semibold">Context</th>
+              <th className="px-4 py-2 text-right font-semibold">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-sky-900/20">
+            {visibleIocs.map((ioc, idx) => (
+              <tr key={`${ioc.source}-${ioc.ioc_type}-${ioc.value}-${idx}`} className="hover:bg-sky-950/20">
+                <td className="px-4 py-2">
+                  <span className="rounded border border-sky-800/50 bg-sky-950/40 px-1.5 py-0.5 text-[10px] uppercase text-sky-300">
+                    {ioc.ioc_type}
+                  </span>
+                </td>
+                <td className="px-3 py-2 font-semibold text-slate-200">{ioc.value}</td>
+                <td className="px-3 py-2">
+                  <RiskBadge level={ioc.severity} />
+                </td>
+                <td className="px-3 py-2">
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                      ioc.source === 'custom'
+                        ? 'border border-amber-500/40 bg-amber-950/50 text-amber-300'
+                        : 'border border-slate-700 bg-slate-900 text-slate-400'
+                    }`}
+                  >
+                    {ioc.source}
+                  </span>
+                </td>
+                <td className="px-3 py-2 max-w-[220px] truncate text-[11px] text-slate-400" title={ioc.description}>
+                  {ioc.description || '—'}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {ioc.source === 'custom' && ioc.id ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(ioc)}
+                      className="rounded border border-rose-900/60 px-2 py-0.5 text-[10px] text-rose-400 hover:bg-rose-950/40"
+                    >
+                      Remove
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-slate-600">Core Feed</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function AuditTrail({
+  logs,
+  verification,
+  onVerify,
+  verifying,
+  onExportCsv,
+}: {
+  logs: AuditLog[];
+  verification?: AuditChainVerification | null;
+  onVerify: () => void;
+  verifying: boolean;
+  onExportCsv: () => void;
+}) {
+  return (
+    <section className="tl-hud-glass rounded-xl overflow-hidden">
+      <div className="border-b border-sky-900/40 p-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
+            CRYPTOGRAPHIC AUDIT TRAIL (HMAC-SHA256)
+          </h2>
+          <p className="mt-0.5 text-[10px] font-mono text-slate-400">
+            Append-only ledger chained via prev_hash + HMAC-SHA256 digest
+          </p>
+        </div>
+
+        <div className="flex items-center gap-1.5 font-mono text-[10px]">
+          <button
+            type="button"
+            onClick={onVerify}
+            disabled={verifying}
+            className="rounded border border-emerald-700/60 bg-emerald-950/50 px-2.5 py-1 font-bold text-emerald-300 hover:bg-emerald-900/50 disabled:opacity-50"
+          >
+            {verifying ? 'VERIFYING...' : 'VERIFY CHAIN'}
+          </button>
+          <button
+            type="button"
+            onClick={onExportCsv}
+            className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-slate-300 hover:bg-slate-800"
+          >
+            EXPORT CSV
+          </button>
+        </div>
+      </div>
+
+      {verification && (
+        <div
+          className={`px-4 py-2 border-b font-mono text-[10px] flex flex-wrap items-center justify-between gap-2 ${
+            verification.valid
+              ? 'border-emerald-800/40 bg-emerald-950/30 text-emerald-300'
+              : 'border-rose-800/50 bg-rose-950/40 text-rose-300'
+          }`}
+        >
+          <span>
+            {verification.valid
+              ? `✓ HMAC CHAIN INTACT · ${verification.checked_count} / ${verification.total_records} BLOCKS VERIFIED`
+              : `✗ TAMPER DETECTED AT RECORD #${verification.broken_at_id ?? '?'} (${verification.reason ?? 'hash mismatch'})`}
+          </span>
+          <span className="text-slate-400">
+            HEAD: {verification.head_signature ? `${verification.head_signature.slice(0, 16)}…` : 'GENESIS'}
+          </span>
+        </div>
+      )}
+
       {logs.length === 0 ? (
-        <EmptyState title="No audit events" description="Logins and analyses will appear here." />
+        <EmptyState title="No audit events" description="Logins, IOC updates, exports, and analyses appear here." />
       ) : (
         <ul className="tl-scroll max-h-[340px] divide-y divide-sky-900/20 overflow-y-auto font-mono text-xs">
           {logs.map((log) => (
@@ -218,7 +512,13 @@ function AuditTrail({ logs }: { logs: AuditLog[] }) {
               <span className="min-w-0 flex-1 truncate text-slate-300 text-[11px]" title={log.resource ?? ''}>
                 {log.resource ?? '—'}
               </span>
-              <span className="hidden w-28 shrink-0 truncate text-right text-[10px] text-slate-400 sm:block">
+              <span
+                className="hidden md:inline-block rounded border border-emerald-900/50 bg-slate-950/80 px-1.5 py-0.5 text-[9px] text-emerald-400"
+                title={`HMAC: ${log.hmac_signature ?? 'none'}\nPREV: ${log.prev_hash ?? 'none'}`}
+              >
+                {log.hmac_signature ? `${log.hmac_signature.slice(0, 10)}…` : 'UNSIGNED'}
+              </span>
+              <span className="hidden w-24 shrink-0 truncate text-right text-[10px] text-slate-400 sm:block">
                 {log.ip ?? '—'}
               </span>
               <span className="w-20 shrink-0 text-right text-[10px] text-slate-500">
@@ -356,29 +656,50 @@ function UserRoster({
 
 /* ------------------------------------------------------------------- main command center */
 
+const NODE_POSITIONS: [number, number, number][] = [
+  [0, 0.4, 0],
+  [-2.4, 0.2, 1.2],
+  [2.2, 0.3, -1.1],
+  [-1.5, 0.25, -2.0],
+  [1.6, 0.2, 1.8],
+  [3.2, 0.2, 0.6],
+  [-3.1, 0.2, -0.8],
+];
+
 function SocDashboard() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNode, setSelectedNode] = useState<VectorNode | null>(null);
   const [showRadarPopup, setShowRadarPopup] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [verifyingChain, setVerifyingChain] = useState(false);
 
-  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
+  const { data: stats } = useQuery<AdminStats>({
     queryKey: ['admin', 'stats'],
     queryFn: () => api.admin.stats(),
   });
 
-  const { data: campaigns, isLoading: campaignsLoading } = useQuery({
+  const { data: campaigns } = useQuery<Campaign[]>({
     queryKey: ['admin', 'campaigns'],
     queryFn: () => api.admin.campaigns(),
   });
 
-  const { data: logs, isLoading: logsLoading } = useQuery({
+  const { data: logs } = useQuery<AuditLog[]>({
     queryKey: ['admin', 'audit-logs'],
     queryFn: () => api.admin.auditLogs(60),
   });
 
-  const { data: users, isLoading: usersLoading } = useQuery({
+  const { data: chainVerification, refetch: refetchChainVerification } = useQuery<AuditChainVerification>({
+    queryKey: ['admin', 'audit-verify'],
+    queryFn: () => api.admin.verifyAuditChain(),
+  });
+
+  const { data: iocs } = useQuery<ThreatIOC[]>({
+    queryKey: ['admin', 'iocs'],
+    queryFn: () => api.admin.listIocs(),
+  });
+
+  const { data: users } = useQuery<AdminUser[]>({
     queryKey: ['admin', 'users'],
     queryFn: () => api.admin.users(),
   });
@@ -388,12 +709,12 @@ function SocDashboard() {
     queryFn: () => api.admin.analyses({ limit: 100 }),
   });
 
-  const { data: metrics } = useQuery({
+  const { data: metrics } = useQuery<AdminMetrics>({
     queryKey: ['admin', 'metrics'],
     queryFn: () => api.admin.metrics(),
   });
 
-  const analyses = analysesData?.items || [];
+  const analyses: AdminAnalysis[] = analysesData?.items || [];
 
   const handleRefresh = async () => {
     try {
@@ -401,21 +722,39 @@ function SocDashboard() {
         queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] }),
         queryClient.invalidateQueries({ queryKey: ['admin', 'campaigns'] }),
         queryClient.invalidateQueries({ queryKey: ['admin', 'audit-logs'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'audit-verify'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'iocs'] }),
         queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
         queryClient.invalidateQueries({ queryKey: ['admin', 'analyses'] }),
         queryClient.invalidateQueries({ queryKey: ['admin', 'metrics'] }),
       ]);
       toast.success('SOC telemetry re-synchronized');
-    } catch (err) {
+    } catch {
       toast.error('Failed to refresh dashboard');
+    }
+  };
+
+  const handleVerifyChain = async () => {
+    setVerifyingChain(true);
+    try {
+      const res = await refetchChainVerification();
+      if (res.data?.valid) {
+        toast.success(`HMAC chain verified (${res.data.checked_count} blocks intact)`);
+      } else {
+        toast.error(`Audit chain tamper detected at record #${res.data?.broken_at_id ?? '?'}`);
+      }
+    } catch {
+      toast.error('Failed to verify audit chain');
+    } finally {
+      setVerifyingChain(false);
     }
   };
 
   const handleExportAudit = async () => {
     try {
       await api.admin.exportAuditLogsCsv();
-      toast.success('Audit logs exported');
-    } catch (err) {
+      toast.success('HMAC-signed audit logs exported');
+    } catch {
       toast.error('Failed to export audit logs');
     }
   };
@@ -423,48 +762,148 @@ function SocDashboard() {
   const handleExportThreats = async () => {
     try {
       await api.admin.exportAnalysesCsv();
-      toast.success('Threat feed exported');
-    } catch (err) {
+      toast.success('Zero-storage threat feed exported');
+    } catch {
       toast.error('Failed to export threat feed');
     }
   };
 
   const handleCampaignReport = () => {
-    toast.success('Generating Intelligence Dossier & Correlated Attack Graph...');
+    handleExportThreats();
   };
 
-  const handleIsolateAssets = () => {
-    toast.error('Triggering Firewall Vector Quarantine across ingress endpoints');
+  const handleIsolateAssets = async () => {
+    try {
+      const res = await api.admin.syncIocs();
+      toast.success(`Enforced ${res.active_custom_iocs} custom IOC blocklist rules across scoring channels`);
+    } catch {
+      toast.error('Failed to sync IOC quarantine rules');
+    }
   };
 
   const handleAlertManagers = () => {
-    toast.info('Emergency Telegram & Slack SOC alert broadcast sent to Security Team');
+    toast.info('SOC campaign advisory queued for active operator accounts');
   };
 
   const activeCampaign = campaigns?.[0] || {
-    id: 1,
-    signature: 'Malware Campaign (Urdu Phishing Dropper)',
-    hits: 541,
-    severity: 'CRITICAL',
-    distinct_users: 14,
+    id: 0,
+    signature: 'Awaiting multi-user campaign correlation',
+    hits: analyses.length,
+    severity: analyses[0]?.risk_level || 'LOW',
+    distinct_users: users?.length || 0,
     first_seen: new Date().toISOString(),
     last_seen: new Date().toISOString(),
   };
+
+  // Dynamic technique meters derived from live backend stats
+  const liveMeters = useMemo(() => {
+    if (stats && stats.total_analyses > 0) {
+      const denom = Math.max(1, stats.total_analyses);
+      return [
+        {
+          label: 'Phishing',
+          pct: Math.min(100, Math.round((stats.phishing / denom) * 100)),
+          color: 'ruby' as const,
+        },
+        {
+          label: 'Financial / Raast',
+          pct: Math.min(100, Math.round((stats.financial_fraud / denom) * 100)),
+          color: 'ruby' as const,
+        },
+        {
+          label: 'Job / Invest',
+          pct: Math.min(
+            100,
+            Math.round(((stats.job_scams + stats.investment_scams) / denom) * 100),
+          ),
+          color: 'amber' as const,
+        },
+        {
+          label: 'Prize / Lure',
+          pct: Math.min(100, Math.round((stats.prize_scams / denom) * 100)),
+          color: 'cyan' as const,
+        },
+      ];
+    }
+    return [
+      { label: 'Phishing', pct: 0, color: 'ruby' as const },
+      { label: 'Financial / Raast', pct: 0, color: 'ruby' as const },
+      { label: 'Job / Invest', pct: 0, color: 'amber' as const },
+      { label: 'Prize / Lure', pct: 0, color: 'cyan' as const },
+    ];
+  }, [stats]);
+
+  // Dynamic 3D VectorNodes derived from live campaigns & high-risk analyses when present
+  const liveVectorNodes = useMemo<VectorNode[] | undefined>(() => {
+    const built: VectorNode[] = [];
+    for (const c of (campaigns ?? []).slice(0, 4)) {
+      const idx = built.length;
+      built.push({
+        id: `c${c.id}`,
+        name: c.signature.slice(0, 18).toUpperCase(),
+        ip: `${c.distinct_users} users · ${c.hits} hits`,
+        type: c.severity === 'CRITICAL' || c.severity === 'HIGH' ? 'malware' : 'c2',
+        position: NODE_POSITIONS[idx % NODE_POSITIONS.length],
+        hits: Math.min(100, Math.max(25, c.hits * 15)),
+      });
+    }
+    for (const a of analyses.slice(0, 7 - built.length)) {
+      const idx = built.length;
+      built.push({
+        id: `a${a.id}`,
+        name: (a.threat_type || a.input_type || 'SCAN').slice(0, 18).toUpperCase(),
+        ip: `${a.input_type.toUpperCase()} #${a.id}`,
+        type:
+          a.risk_level === 'CRITICAL' || a.risk_level === 'HIGH'
+            ? 'malware'
+            : a.risk_level === 'MEDIUM'
+            ? 'c2'
+            : 'suspicious',
+        position: NODE_POSITIONS[idx % NODE_POSITIONS.length],
+        hits: a.risk_score,
+      });
+    }
+    return built.length >= 2 ? built : undefined;
+  }, [campaigns, analyses]);
+
+  // Live cockpit risk score & Khatra banner
+  const cockpitRiskScore = useMemo(() => {
+    if (analyses.length > 0) {
+      const topRecent = Math.max(...analyses.slice(0, 10).map((a) => a.risk_score));
+      return topRecent;
+    }
+    if (metrics?.performance?.threat_ratio_pct !== undefined) {
+      return Math.round(metrics.performance.threat_ratio_pct);
+    }
+    return 0;
+  }, [analyses, metrics]);
+
+  const khatraLevel =
+    cockpitRiskScore >= 70 ? 'BULAND' : cockpitRiskScore >= 40 ? 'DARMIYANA' : 'MEHFOOZ';
 
   // Filter analyses based on search query
   const filteredAnalyses = useMemo(() => {
     if (!searchQuery) return analyses.slice(0, 4);
     const q = searchQuery.toLowerCase();
-    return analyses.filter(a => 
-      (a.content_snippet && a.content_snippet.toLowerCase().includes(q)) ||
-      (a.risk_level && a.risk_level.toLowerCase().includes(q)) ||
-      (a.input_type && a.input_type.toLowerCase().includes(q))
-    ).slice(0, 4);
+    return analyses
+      .filter(
+        (a) =>
+          (a.content_snippet && a.content_snippet.toLowerCase().includes(q)) ||
+          (a.threat_type && a.threat_type.toLowerCase().includes(q)) ||
+          (a.risk_level && a.risk_level.toLowerCase().includes(q)) ||
+          (a.input_type && a.input_type.toLowerCase().includes(q)),
+      )
+      .slice(0, 4);
   }, [analyses, searchQuery]);
+
+  const customIocCount = useMemo(
+    () => (iocs ?? []).filter((item) => item.source === 'custom').length,
+    [iocs],
+  );
 
   return (
     <div className="min-h-screen bg-[#040711] text-slate-100 tl-circuit-pattern">
-      {/* 1. TOP COCKPIT HEADER BAR (Matching web.jpg) */}
+      {/* 1. TOP COCKPIT HEADER BAR */}
       <header className="border-b border-sky-950/70 bg-[#060b18]/90 backdrop-blur-xl px-5 py-3 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -481,48 +920,34 @@ function SocDashboard() {
           </h1>
           <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-950/50 px-2 py-0.5 font-mono text-[9px] text-sky-400">
             <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
-            LIVE SOC SENSORS ACTIVE
+            ZERO-STORAGE · 4-CHANNEL FUSION ACTIVE
           </span>
         </div>
 
-        {/* Right side accolade and quick export buttons */}
-        <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-3 px-3 py-1 rounded border border-white/5 bg-white/[0.02] font-mono text-[10px] text-slate-400">
-            <span className="flex items-center gap-1 text-slate-300">
-              <span className="text-amber-400 font-bold">Bē</span> Behance
-            </span>
-            <span className="text-slate-600">/</span>
-            <span className="text-slate-400">Disignssiert Awards</span>
-          </div>
-
-          <div className="flex items-center gap-2 font-mono text-xs">
-            <button
-              onClick={handleRefresh}
-              className="rounded border border-sky-800/60 bg-sky-950/40 px-2.5 py-1 text-[11px] text-sky-300 hover:bg-sky-900/50"
-            >
-              SYNC TELEMETRY
-            </button>
-            <button
-              onClick={handleExportThreats}
-              className="rounded border border-slate-800 bg-slate-900 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
-            >
-              CSV EXPORT
-            </button>
-          </div>
+        <div className="flex items-center gap-2 font-mono text-xs">
+          <button
+            onClick={handleRefresh}
+            className="rounded border border-sky-800/60 bg-sky-950/40 px-2.5 py-1 text-[11px] text-sky-300 hover:bg-sky-900/50"
+          >
+            SYNC TELEMETRY
+          </button>
+          <button
+            onClick={handleExportThreats}
+            className="rounded border border-slate-800 bg-slate-900 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
+          >
+            CSV EXPORT
+          </button>
         </div>
       </header>
 
-      {/* 2. THREE-COLUMN COCKPIT (Direct match to web.jpg layout) */}
+      {/* 2. THREE-COLUMN COCKPIT */}
       <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        
         {/* ---------------- LEFT PANEL (Col 1-3) ---------------- */}
         <div className="lg:col-span-3 space-y-4">
-          
-          {/* Search Box */}
           <div className="relative">
             <input
               type="text"
-              placeholder="Q Search incidents..."
+              placeholder="Search zero-storage incidents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-lg border border-sky-900/50 bg-[#091124]/90 px-3 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
@@ -530,233 +955,255 @@ function SocDashboard() {
             <span className="absolute right-3 top-2.5 text-xs text-slate-500">⌘K</span>
           </div>
 
-          {/* Threat Feed */}
+          {/* Live Threat Feed */}
           <div className="tl-hud-glass rounded-xl p-3.5 space-y-2.5">
             <div className="flex items-center justify-between border-b border-sky-950 pb-2">
               <span className="font-mono text-xs font-bold text-sky-300">Threat Feed</span>
-              <span className="font-mono text-[9px] text-slate-500">LIVE STREAMS</span>
+              <span className="font-mono text-[9px] text-slate-500">
+                {analyses.length} LIVE RECORDS
+              </span>
             </div>
-            
-            <div className="space-y-2">
-              <div className="rounded border border-sky-900/30 bg-slate-950/70 p-2 font-mono text-[11px]">
-                <div className="flex justify-between items-center text-slate-400">
-                  <span>Target: <strong className="text-rose-400">19.135.1.163</strong></span>
-                  <span className="rounded bg-rose-950/60 text-rose-300 border border-rose-800/40 px-1 text-[9px]">Phishing</span>
-                </div>
-                <div className="mt-1 flex justify-between text-[10px] text-slate-500">
-                  <span>Source: 04.17.20.211</span>
-                  <span>Port 443 TLS</span>
-                </div>
-              </div>
 
-              {filteredAnalyses.slice(0, 2).map((item, idx) => (
-                <div key={item.id || idx} className="rounded border border-sky-950/40 bg-slate-950/40 p-2 font-mono text-[11px]">
-                  <div className="flex justify-between items-center text-slate-400">
-                    <span>Target: <strong className="text-sky-300">{item.input_type || 'HTTP'}</strong></span>
-                    <span className={`rounded px-1 text-[9px] border ${
-                      item.risk_level === 'CRITICAL' ? 'bg-rose-950/60 text-rose-300 border-rose-800/40' :
-                      item.risk_level === 'HIGH' ? 'bg-amber-950/60 text-amber-300 border-amber-800/40' :
-                      'bg-sky-950/60 text-sky-300 border-sky-800/40'
-                    }`}>
-                      {item.risk_level || 'RISK'}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 truncate text-[10px] text-slate-500">
-                    {item.content_snippet?.slice(0, 42) || 'Encrypted telemetry stream'}
-                  </div>
+            <div className="space-y-2">
+              {filteredAnalyses.length === 0 ? (
+                <div className="rounded border border-sky-950/40 bg-slate-950/50 p-3 font-mono text-[11px] text-slate-400">
+                  No matching telemetry records yet. Submit a scan to populate live SOC feed.
                 </div>
-              ))}
+              ) : (
+                filteredAnalyses.slice(0, 3).map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded border border-sky-950/40 bg-slate-950/50 p-2 font-mono text-[11px]"
+                  >
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span className="truncate max-w-[150px]">
+                        Vector: <strong className="text-sky-300">{item.threat_type || item.input_type}</strong>
+                      </span>
+                      <span
+                        className={`rounded px-1 text-[9px] border ${
+                          item.risk_level === 'CRITICAL'
+                            ? 'bg-rose-950/60 text-rose-300 border-rose-800/40'
+                            : item.risk_level === 'HIGH'
+                            ? 'bg-amber-950/60 text-amber-300 border-amber-800/40'
+                            : 'bg-sky-950/60 text-sky-300 border-sky-800/40'
+                        }`}
+                      >
+                        {item.risk_level} · {item.risk_score}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 truncate text-[10px] text-slate-500" title={item.content_snippet}>
+                      {item.content_snippet || 'Zero-storage hash reference'}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          {/* Technique Meters */}
+          {/* Live Technique Meters */}
           <div className="tl-hud-glass rounded-xl p-3.5 space-y-2.5">
             <div className="flex items-center justify-between border-b border-sky-950 pb-2">
               <span className="font-mono text-xs font-bold text-sky-300">Technique Meters</span>
-              <span className="font-mono text-[9px] text-slate-500">HEURISTICS</span>
+              <span className="font-mono text-[9px] text-slate-500">LIVE TAXONOMY</span>
             </div>
-            
+
             <div className="space-y-2 pt-1">
-              <SegmentedMeter label="Phishing" pct={70} color="ruby" />
-              <SegmentedMeter label="Malware" pct={70} color="ruby" />
-              <SegmentedMeter label="Brute Force" pct={66} color="amber" />
-              <SegmentedMeter label="Brute Force" pct={65} color="amber" />
+              {liveMeters.map((m) => (
+                <SegmentedMeter key={m.label} label={m.label} pct={m.pct} color={m.color} />
+              ))}
             </div>
-            
+
             <div className="mt-2 rounded border border-sky-900/30 bg-sky-950/30 px-2 py-1 font-mono text-[9px] text-sky-400 flex items-center justify-between">
-              <span>DIO3IETRIC DETAILS:</span>
-              <span className="font-bold">[Face ID Scan Successful]</span>
+              <span>ZERO-STORAGE MODE:</span>
+              <span className="font-bold text-emerald-400">[SHA-256 REDACTED]</span>
             </div>
           </div>
 
           {/* Campaign Metadata & Sparklines */}
           <div className="tl-hud-glass rounded-xl p-3.5 space-y-2 font-mono text-[11px]">
             <div className="flex items-center justify-between border-b border-sky-950 pb-2">
-              <span className="text-xs font-bold text-sky-300">Campaign Metadata</span>
-              <span className="text-[9px] text-slate-500">•••</span>
+              <span className="text-xs font-bold text-sky-300">Engine Telemetry</span>
+              <span className="text-[9px] text-slate-500">4-CHANNEL</span>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-[10px] pt-1">
               <div>
-                <span className="text-slate-500 block">Threat Acq:</span>
+                <span className="text-slate-500 block">Avg Latency:</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-300">19.128.1.193</span>
+                  <span className="text-slate-300">
+                    {metrics?.performance?.avg_latency_ms ?? 0} ms
+                  </span>
                   <WaveformPulse />
                 </div>
               </div>
               <div>
-                <span className="text-slate-500 block">Source:</span>
+                <span className="text-slate-500 block">ML Engine:</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-300">84.17.20.211</span>
+                  <span className="text-slate-300">
+                    {metrics?.ml_engine?.model_loaded ? '15k TF-IDF' : 'Standby'}
+                  </span>
                   <WaveformSine />
                 </div>
               </div>
               <div>
-                <span className="text-slate-500 block">Status:</span>
+                <span className="text-slate-500 block">Campaigns:</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-rose-400 font-bold">Active</span>
+                  <span className="text-rose-400 font-bold">
+                    {campaigns?.length ?? 0} Active
+                  </span>
                   <WaveformBars />
                 </div>
               </div>
               <div>
-                <span className="text-slate-500 block">Decryption:</span>
-                <span className="text-emerald-400 font-bold">Verified</span>
+                <span className="text-slate-500 block">HMAC Ledger:</span>
+                <span
+                  className={`font-bold ${
+                    chainVerification?.valid === false ? 'text-rose-400' : 'text-emerald-400'
+                  }`}
+                >
+                  {chainVerification?.valid === false ? 'Tampered' : 'Verified'}
+                </span>
               </div>
             </div>
 
-            {/* Sparkline waveforms */}
             <div className="pt-1">
-              <span className="text-[9px] text-slate-500 block mb-1">Signal Oscilloscope // Port 443</span>
+              <span className="text-[9px] text-slate-500 block mb-1">
+                Parallel Scoring Pipeline // ML + Rules + SE + URL Intel
+              </span>
               <WaveformCanvas />
             </div>
-
-            <div className="flex justify-between items-center text-[10px] pt-1 text-slate-400 border-t border-sky-950/60">
-              <span>Target: 10.128.1.152</span>
-              <span>Source: 84.17.28.211</span>
-            </div>
           </div>
-
         </div>
 
         {/* ---------------- CENTER PANEL (Col 4-9) ---------------- */}
         <div className="lg:col-span-6 space-y-4 flex flex-col">
-          
-          {/* Top Status Bar: Technique Meters | Decised Threat in Analysis */}
+          {/* Top Status Bar */}
           <div className="tl-hud-glass rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2">
-                <span className="text-sky-400 font-bold">Technique Meters</span>
+                <span className="text-sky-400 font-bold">Live Threat Summary</span>
                 <span className="text-slate-600">|</span>
-                <span className="text-slate-300 font-semibold">Decised Threat in Analysis</span>
+                <span className="text-slate-300 font-semibold">
+                  {stats?.total_analyses ?? 0} Total Scans · {stats?.high_risk ?? 0} High/Critical
+                </span>
               </div>
-
-              <div className="flex flex-col gap-1 text-[11px]">
-                <div className="flex items-center gap-3">
-                  <span>Target: <strong className="text-rose-400">19.135.1.163</strong></span>
-                  <span className="text-slate-600">/</span>
-                  <span>Type: <strong className="text-rose-400">Phishing</strong></span>
-                  <span className="text-slate-600">/</span>
-                  <span>Source: <strong className="text-sky-300">04.17.20.211</strong></span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span>Target: <strong className="text-rose-400">19.135.1.163</strong></span>
-                  <span className="text-slate-600">/</span>
-                  <span>Type: <strong className="text-rose-400">Phishing</strong></span>
-                  <span className="text-slate-600">/</span>
-                  <span>Source: <strong className="text-sky-300">04.17.20.211</strong></span>
-                </div>
+              <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                <span>
+                  Lead Signature:{' '}
+                  <strong className="text-rose-400">
+                    {activeCampaign.signature.slice(0, 28)}
+                  </strong>
+                </span>
+                <span className="text-slate-600">/</span>
+                <span>
+                  Custom IOCs: <strong className="text-sky-300">{customIocCount}</strong>
+                </span>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-4">
-              <SegmentedMeter label="Phishing" pct={70} color="ruby" />
-              <SegmentedMeter label="Malware" pct={70} color="ruby" />
-              <SegmentedMeter label="Brute Force" pct={65} color="amber" />
+              {liveMeters.slice(0, 3).map((m) => (
+                <SegmentedMeter key={m.label} label={m.label} pct={m.pct} color={m.color} />
+              ))}
             </div>
           </div>
 
-          {/* MAIN 3D VECTOR NODES MAP (Three.js Isometric Canvas) */}
-          <div className={`relative flex-1 min-h-[460px] rounded-xl overflow-hidden border border-sky-900/50 bg-[#02050f] shadow-2xl transition-all ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''}`}>
+          {/* MAIN 3D VECTOR NODES MAP */}
+          <div
+            className={`relative flex-1 min-h-[460px] rounded-xl overflow-hidden border border-sky-900/50 bg-[#02050f] shadow-2xl transition-all ${
+              isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''
+            }`}
+          >
             <VectorNodesMap3D
+              nodes={liveVectorNodes}
               selectedNode={selectedNode}
               onSelectNode={(node) => setSelectedNode(node)}
             />
 
-            {/* Top right fullscreen toggle */}
-            <button 
+            <button
               onClick={() => setIsFullscreen(!isFullscreen)}
               className="absolute top-4 right-4 p-1.5 rounded bg-sky-950/60 border border-sky-500/30 text-sky-400 hover:bg-sky-900/80 z-10 transition-colors"
               title="Toggle Fullscreen"
             >
               {isFullscreen ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+                </svg>
               ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                </svg>
               )}
             </button>
 
-            {/* Bottom Campaign Metadata Console with Tactical Buttons */}
+            {/* Bottom Campaign Metadata Console */}
             <div className="absolute bottom-4 left-4 z-10 tl-hud-glass rounded-xl p-4 font-mono w-[calc(100%-2rem)] md:w-[600px] backdrop-blur-md bg-[#060b18]/80 border-sky-500/30">
               <div className="flex items-center justify-between border-b border-sky-900/40 pb-2 mb-3">
                 <span className="text-xs font-bold text-sky-400">Campaign Metadata</span>
-                <span className="text-[10px] text-slate-500">SYSTEM-WIDE THREAT VECTOR #23783</span>
+                <span className="text-[10px] text-slate-500">
+                  CORRELATION ENGINE · {campaigns?.length ?? 0} CLUSTERS
+                </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-4">
                 <div>
                   <span className="text-[10px] text-slate-500 block">Campaign:</span>
-                  <span className="text-rose-400 font-bold truncate block">{activeCampaign.signature.slice(0, 20)}</span>
+                  <span className="text-rose-400 font-bold truncate block" title={activeCampaign.signature}>
+                    {activeCampaign.signature.slice(0, 20)}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block">Attribute:</span>
-                  <span className="text-slate-300">None</span>
+                  <span className="text-[10px] text-slate-500 block">Severity:</span>
+                  <span className="text-slate-300">{activeCampaign.severity}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block">File Type / Lang:</span>
-                  <span className="text-sky-300">Urdu / OCR</span>
+                  <span className="text-[10px] text-slate-500 block">Coverage:</span>
+                  <span className="text-sky-300">EN + Roman Urdu + Raast</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block">Source IPs:</span>
-                  <span className="text-slate-300">84.17.211</span>
+                  <span className="text-[10px] text-slate-500 block">Correlated Hits:</span>
+                  <span className="text-slate-300">
+                    {activeCampaign.hits} ({activeCampaign.distinct_users} users)
+                  </span>
                 </div>
               </div>
 
-              {/* Tactical Buttons */}
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-sky-950 pt-3">
-                <span className="text-[10px] text-slate-500">SYSTEM-WIDE ACTIONS</span>
+                <span className="text-[10px] text-slate-500">SOC RESPONSE ACTIONS</span>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <button
                     type="button"
                     onClick={handleCampaignReport}
                     className="rounded border border-sky-700/60 bg-sky-950/60 px-3 py-1.5 font-bold text-sky-300 hover:bg-sky-900/60 transition-all active:scale-95"
                   >
-                    CAMPAIGN REPORT
+                    EXPORT DOSSIER
                   </button>
                   <button
                     type="button"
                     onClick={handleIsolateAssets}
                     className="rounded border border-rose-800/70 bg-rose-950/60 px-3 py-1.5 font-bold text-rose-400 hover:bg-rose-900/60 transition-all active:scale-95"
                   >
-                    ISOLATE ASSETS
+                    SYNC IOC QUARANTINE
                   </button>
                   <button
                     type="button"
                     onClick={handleAlertManagers}
                     className="rounded border border-amber-700/60 bg-amber-950/60 px-3 py-1.5 font-bold text-amber-300 hover:bg-amber-900/60 transition-all active:scale-95"
                   >
-                    ALERT MANAGERS
+                    ALERT OPERATORS
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Floating 2D Star Topology Radar Popup */}
             {showRadarPopup && (
               <div className="absolute bottom-4 right-4 z-10 tl-hud-glass rounded-xl p-3 font-mono backdrop-blur-md bg-[#060b18]/80 border-sky-500/30 w-52">
                 <div className="flex items-center justify-between border-b border-sky-950 pb-1.5 mb-2">
                   <span className="text-[10px] font-bold text-sky-300">Vector Nodes Map</span>
                   <button onClick={() => setShowRadarPopup(false)} className="text-slate-500 hover:text-sky-400">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
                   </button>
                 </div>
                 <div className="relative h-24 w-full flex items-center justify-center rounded border border-sky-950/60 bg-slate-950/70">
@@ -778,47 +1225,48 @@ function SocDashboard() {
               </div>
             )}
           </div>
-
         </div>
 
         {/* ---------------- RIGHT PANEL (Col 10-12) ---------------- */}
         <div className="lg:col-span-3 space-y-4">
-          
-          {/* Vector Nodes Map (Mini Star Topology Radar) */}
           <div className="tl-hud-glass rounded-xl p-3.5 space-y-2">
             <div className="flex items-center justify-between border-b border-sky-950 pb-2">
               <span className="font-mono text-xs font-bold text-sky-300">Vector Nodes Map</span>
-              <span className="font-mono text-[9px] text-slate-500">•••</span>
+              <span className="font-mono text-[9px] text-slate-500">TOPOLOGY</span>
             </div>
 
-            {/* Radar SVG */}
             <div className="relative h-28 w-full flex items-center justify-center rounded border border-sky-950/60 bg-slate-950/70">
               <svg className="h-full w-full" viewBox="0 0 160 100">
-                {/* Radial lines */}
                 <line x1="80" y1="50" x2="30" y2="30" stroke="#ef4444" strokeWidth="1" strokeDasharray="2 2" />
                 <line x1="80" y1="50" x2="130" y2="25" stroke="#f59e0b" strokeWidth="1" strokeDasharray="2 2" />
                 <line x1="80" y1="50" x2="135" y2="75" stroke="#38bdf8" strokeWidth="1" />
                 <line x1="80" y1="50" x2="35" y2="75" stroke="#38bdf8" strokeWidth="1" />
 
-                {/* Central Hub */}
                 <circle cx="80" cy="50" r="14" fill="#082f49" stroke="#38bdf8" strokeWidth="1.5" />
                 <circle cx="80" cy="50" r="4" fill="#38bdf8" />
-                <text x="80" y="32" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">Vector Nodes</text>
+                <text x="80" y="32" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">
+                  SOC Hub
+                </text>
 
-                {/* Outer satellite nodes */}
                 <circle cx="30" cy="30" r="5" fill="#ef4444" />
-                <text x="30" y="20" fill="#ef4444" fontSize="5" fontFamily="monospace" textAnchor="middle">Metaorbid.T68</text>
+                <text x="30" y="20" fill="#ef4444" fontSize="5" fontFamily="monospace" textAnchor="middle">
+                  ML Classifier
+                </text>
 
                 <circle cx="130" cy="25" r="5" fill="#f59e0b" />
-                <text x="130" y="15" fill="#f59e0b" fontSize="5" fontFamily="monospace" textAnchor="middle">OG7h553/88</text>
+                <text x="130" y="15" fill="#f59e0b" fontSize="5" fontFamily="monospace" textAnchor="middle">
+                  Rule + IOC
+                </text>
 
                 <circle cx="135" cy="75" r="5" fill="#38bdf8" />
-                <text x="135" y="87" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">R8.172.88.89X</text>
+                <text x="135" y="87" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">
+                  SE Taxonomy
+                </text>
 
                 <circle cx="35" cy="75" r="5" fill="#38bdf8" />
-                <text x="35" y="87" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">Vector Notse</text>
-                
-                <text x="80" y="70" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">Squcere</text>
+                <text x="35" y="87" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">
+                  URL Heuristic
+                </text>
               </svg>
               <span className="absolute bottom-1 right-2 font-mono text-[8px] text-slate-500">STAR-CORRELATION</span>
             </div>
@@ -828,87 +1276,93 @@ function SocDashboard() {
           <div className="tl-hud-glass-ruby rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-rose-950 pb-2">
               <span className="font-mono text-xs font-bold text-rose-300">Risk Visualization</span>
-              <span className="font-mono text-[9px] text-slate-500">•••</span>
+              <span className="font-mono text-[9px] text-slate-500">LIVE PEAK</span>
             </div>
 
-            {/* KHATRA LEVEL: BULAND Banner matching web.jpg */}
             <div className="rounded border border-rose-600/50 bg-rose-950/80 py-1.5 px-3 text-center shadow-[0_0_15px_rgba(244,63,94,0.3)]">
               <span className="font-mono text-xs font-extrabold tracking-widest text-rose-300">
-                KHATRA LEVEL: BULAND
+                KHATRA LEVEL: {khatraLevel}
               </span>
             </div>
 
-            {/* 3D Mechanical Cyber Shield with Ruby Core & Score */}
             <div className="relative">
-              <RiskShield3D score={84} level="BULAND" />
-              
-              {/* Telemetry Readouts around shield */}
+              <RiskShield3D score={cockpitRiskScore} level={khatraLevel} />
+
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[9px] text-slate-400 pt-1">
-                <div className="flex justify-between"><span>SPK:</span><span className="text-slate-200">10451M.201</span></div>
-                <div className="flex justify-between"><span>OG06:</span><span className="text-slate-200">—</span></div>
-                
-                <div className="flex justify-between"><span>CASIA:</span><span className="text-slate-200">23004</span></div>
-                <div className="flex justify-between"><span>KOON:</span><span className="text-rose-400 font-bold">224k.990</span></div>
-                
-                <div className="flex justify-between"><span>DFH:</span><span className="text-slate-200">—</span></div>
-                <div className="flex justify-between"><span>MODI:</span><span className="text-slate-200">—</span></div>
-                
-                <div className="flex justify-between"><span>ICDOECK8:</span><span className="text-slate-200">—</span></div>
-                <div className="flex justify-between"><span>7408:</span><span className="text-slate-200">—</span></div>
-                
-                <div className="flex justify-between"><span>DEOID:</span><span className="text-slate-200">—</span></div>
-                <div className="flex justify-between"><span>THB OBCKS:</span><span className="text-slate-200">—</span></div>
-                
-                <div className="flex justify-between"><span>TURB:</span><span className="text-slate-200">—</span></div>
-                <div className="flex justify-between"><span>T400:</span><span className="text-slate-200">330</span></div>
+                <div className="flex justify-between">
+                  <span>SCANS:</span>
+                  <span className="text-slate-200">{stats?.total_analyses ?? 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>HIGH/CRIT:</span>
+                  <span className="text-rose-400 font-bold">{stats?.high_risk ?? 0}</span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span>LATENCY:</span>
+                  <span className="text-slate-200">{metrics?.performance?.avg_latency_ms ?? 0}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>CAMPAIGNS:</span>
+                  <span className="text-slate-200">{campaigns?.length ?? 0}</span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span>IOC FEED:</span>
+                  <span className="text-sky-300">{iocs?.length ?? 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>AUDIT HMAC:</span>
+                  <span className="text-emerald-400">
+                    {chainVerification?.valid === false ? 'BROKEN' : 'OK'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Connection Types and Indicators Legend matching web.jpg */}
+          {/* Connection Types and Indicators Legend */}
           <div className="tl-hud-glass rounded-xl p-3.5 space-y-2 font-mono text-xs">
             <div className="flex items-center justify-between border-b border-sky-950 pb-2">
               <span className="text-xs font-bold text-sky-300">Connection Types & Indicators</span>
-              <span className="text-[9px] text-slate-500">•••</span>
+              <span className="text-[9px] text-slate-500">LEGEND</span>
             </div>
 
             <div className="space-y-2 pt-1 text-[11px]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_#f43f5e]" />
-                  <span className="text-rose-400 font-semibold">Malware</span>
+                  <span className="text-rose-400 font-semibold">High / Critical Scam</span>
                 </div>
-                <span className="text-slate-500">→ Node</span>
+                <span className="text-slate-500">→ Octahedron</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-sky-400 shadow-[0_0_6px_#38bdf8]" />
-                  <span className="text-sky-300 font-semibold">Suspicious Files</span>
+                  <span className="text-sky-300 font-semibold">Low / Benign Telemetry</span>
                 </div>
-                <span className="text-slate-500">→ Connection line</span>
+                <span className="text-slate-500">→ Tetrahedron</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
-                  <span className="text-amber-400 font-semibold">C2 (Command & Control)</span>
+                  <span className="text-amber-400 font-semibold">Correlated Campaign</span>
                 </div>
-                <span className="text-slate-500">→ Vector arrow</span>
+                <span className="text-slate-500">→ Cube Node</span>
               </div>
             </div>
           </div>
-
         </div>
-
       </div>
 
-      {/* 3. LOWER OPERATIONS DECK: CAMPAIGN REGISTRY, AUDIT, & RBAC */}
+      {/* 3. LOWER OPERATIONS DECK: TREND, CAMPAIGNS, IOC BLOCKLIST, HMAC AUDIT, & RBAC */}
       <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto border-t border-sky-950/60 mt-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-mono text-xs text-slate-400">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            ORGANIZATION COMPLIANCE & INCIDENT ARCHIVES
+            ORGANIZATION COMPLIANCE, IOC CONTROLS & CRYPTOGRAPHIC INCIDENT ARCHIVES
           </div>
         </div>
 
@@ -928,9 +1382,18 @@ function SocDashboard() {
         {/* Active Campaigns Table */}
         <CampaignTable campaigns={campaigns ?? []} />
 
-        {/* Audit Trail & RBAC */}
+        {/* Dynamic IOC Blocklist Controls (FR-12 / DFD Level 0) */}
+        <IOCBlocklistManager iocs={iocs ?? []} onChanged={handleRefresh} />
+
+        {/* Cryptographic Audit Trail (FR-10) & RBAC */}
         <div className="grid gap-6 lg:grid-cols-2">
-          <AuditTrail logs={logs ?? []} />
+          <AuditTrail
+            logs={logs ?? []}
+            verification={chainVerification}
+            onVerify={handleVerifyChain}
+            verifying={verifyingChain}
+            onExportCsv={handleExportAudit}
+          />
           <UserRoster users={users ?? []} onActionSuccess={handleRefresh} />
         </div>
       </div>

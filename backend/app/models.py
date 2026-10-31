@@ -3,22 +3,13 @@
 Tables
 ------
 users            : account records (bcrypt password hashes, RBAC roles)
-analyses         : one row per threat analysis request
-indicators       : per-analysis detected indicators with severity
-se_findings      : social-engineering technique findings per analysis
+analyses         : one row per threat analysis request (zero-storage redacted metadata)
+indicators       : per-analysis detected indicators with severity (redacted)
+se_findings      : social-engineering technique findings per analysis (redacted)
 campaigns        : coordinated attack campaign registry
-audit_logs       : immutable security audit trail
-
-Encryption at rest
-------------------
-Every column that can hold analysed message content (``analyses.content_snippet``,
-``analyses.explanation``, ``analyses.recommendation``, ``indicators.detail``,
-``se_findings.evidence``, ``campaigns.sample_snippet``) is an
-:class:`~app.security.crypto.EncryptedText` column: the value is Fernet-encrypted
-by the application before it reaches the database, so the stored form is
-ciphertext. Reads decrypt transparently. Columns that never hold message bodies
-(hashes, scores, labels, masked senders, audit metadata) stay plaintext so they
-remain queryable.
+audit_logs       : append-only security audit trail linked by chained HMAC-SHA256 signatures
+notifications    : in-app user alerts
+threat_iocs      : SOC-managed custom Indicators of Compromise (domains, keywords, senders)
 """
 import datetime as dt
 
@@ -33,11 +24,15 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    event,
+    text,
 )
 from sqlalchemy.orm import relationship
 
 from app.database import Base
 from app.security.crypto import EncryptedText
+
+GENESIS_AUDIT_HASH = "0" * 64
 
 
 def _now() -> dt.datetime:
@@ -71,8 +66,6 @@ class User(Base):
 
 class Analysis(Base):
     __tablename__ = "analyses"
-    # A client-supplied idempotency key may repeat per user (NULLs are exempt),
-    # so a mobile retry after a dropped connection cannot create a second row.
     __table_args__ = (
         UniqueConstraint("user_id", "client_request_id", name="uq_analysis_user_request"),
         Index("ix_analyses_user_created", "user_id", "created_at"),
@@ -85,9 +78,8 @@ class Analysis(Base):
 
     input_type = Column(String(32), nullable=False)  # text | url | screenshot
     content_hash = Column(String(64), nullable=False, index=True)
-    # Encrypted at rest: truncated, sanitized message content.
+    # Zero-storage hash descriptor / redacted metadata encrypted at rest (NFR-02).
     content_snippet = Column(EncryptedText, nullable=False)
-    # Optional idempotency key from the client (POST retry safety).
     client_request_id = Column(String(64), nullable=True, index=True)
 
     risk_score = Column(Integer, nullable=False)  # 0-100
@@ -127,17 +119,16 @@ class Analysis(Base):
     )
 
 
-
 class Indicator(Base):
     __tablename__ = "indicators"
 
     id = Column(Integer, primary_key=True, index=True)
     analysis_id = Column(Integer, ForeignKey("analyses.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    category = Column(String(64), nullable=False)   # e.g. URL, SocialEngineering, Credential
-    severity = Column(String(16), nullable=False)   # INFO | LOW | MEDIUM | HIGH | CRITICAL
+    category = Column(String(64), nullable=False)
+    severity = Column(String(16), nullable=False)
     title = Column(String(255), nullable=False)
-    detail = Column(EncryptedText, nullable=True)   # may quote the message
+    detail = Column(EncryptedText, nullable=True)
 
     analysis = relationship("Analysis", back_populates="indicators")
 
@@ -150,15 +141,15 @@ class SEFinding(Base):
     id = Column(Integer, primary_key=True, index=True)
     analysis_id = Column(Integer, ForeignKey("analyses.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    technique = Column(String(64), nullable=False)  # Authority, Urgency, Fear, ...
-    intensity = Column(String(16), nullable=False)  # LOW | MEDIUM | HIGH
-    evidence = Column(EncryptedText, nullable=True)  # the quoted trigger phrase
+    technique = Column(String(64), nullable=False)
+    intensity = Column(String(16), nullable=False)  # NONE | LOW | MEDIUM | HIGH
+    evidence = Column(EncryptedText, nullable=True)
 
     analysis = relationship("Analysis", back_populates="se_techniques")
 
 
 class Campaign(Base):
-    """A coordinated attack campaign detected via repeated signatures."""
+    """A coordinated attack campaign detected via repeated IOC or template signatures."""
 
     __tablename__ = "campaigns"
     __table_args__ = (UniqueConstraint("signature", name="uq_campaign_signature"),)
@@ -169,25 +160,57 @@ class Campaign(Base):
     hits = Column(Integer, nullable=False, default=1)
     distinct_users = Column(Integer, nullable=False, default=1)
     severity = Column(String(16), nullable=False, default="MEDIUM")
-    sample_snippet = Column(EncryptedText, nullable=True)  # encrypted like analyses
+    sample_snippet = Column(EncryptedText, nullable=True)
 
     first_seen = Column(DateTime(timezone=True), nullable=False, default=_now)
     last_seen = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
 
 
 class AuditLog(Base):
-    """Append-only security audit trail (OWASP API9: Improper Inventory / API logging)."""
+    """Append-only cryptographic security audit trail chained via HMAC-SHA256 (FR-10)."""
 
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=True, index=True)
-    action = Column(String(64), nullable=False)       # LOGIN, ANALYZE, REGISTER, DENIED...
+    action = Column(String(64), nullable=False)
     resource = Column(String(128), nullable=True)
     ip = Column(String(64), nullable=True)
     user_agent = Column(String(255), nullable=True)
     meta = Column(JSON, nullable=True)
+    prev_hash = Column(String(64), nullable=False, default=GENESIS_AUDIT_HASH)
+    hmac_signature = Column(String(64), nullable=False, default="")
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now, index=True)
+
+
+@event.listens_for(AuditLog, "before_insert")
+def _sign_audit_log_before_insert(mapper, connection, target: AuditLog) -> None:
+    """Guarantee every AuditLog row is chained with HMAC-SHA256 even on direct ORM inserts."""
+    from app.security.audit import compute_audit_hmac
+
+    if target.created_at is None:
+        target.created_at = _now()
+    if target.meta is None:
+        target.meta = {}
+    if target.user_agent is not None:
+        target.user_agent = target.user_agent[:255]
+
+    if not target.hmac_signature:
+        row = connection.execute(
+            text("SELECT hmac_signature FROM audit_logs ORDER BY id DESC LIMIT 1")
+        ).fetchone()
+        prev_sig = row[0] if row and row[0] else GENESIS_AUDIT_HASH
+        target.prev_hash = prev_sig
+        target.hmac_signature = compute_audit_hmac(
+            prev_hash=prev_sig,
+            created_at=target.created_at,
+            user_id=target.user_id,
+            action=target.action,
+            resource=target.resource,
+            ip=target.ip,
+            user_agent=target.user_agent,
+            meta=target.meta,
+        )
 
 
 class Notification(Base):
@@ -202,9 +225,26 @@ class Notification(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     message = Column(String(1000), nullable=False)
-    notification_type = Column(String(32), nullable=False, default="alert")  # alert | campaign | system
+    notification_type = Column(String(32), nullable=False, default="alert")
     is_read = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now, index=True)
 
     user = relationship("User", back_populates="notifications")
 
+
+class ThreatIOC(Base):
+    """SOC-managed Indicator of Compromise blocklist record (FR-12 & DFD D1)."""
+
+    __tablename__ = "threat_iocs"
+    __table_args__ = (
+        UniqueConstraint("ioc_type", "value", name="uq_threat_ioc_type_value"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    ioc_type = Column(String(32), nullable=False, index=True)  # domain | keyword | sender
+    value = Column(String(255), nullable=False, index=True)
+    severity = Column(String(16), nullable=False, default="HIGH")
+    description = Column(String(500), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now, index=True)

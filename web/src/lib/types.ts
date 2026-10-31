@@ -129,7 +129,29 @@ export interface AuditLog {
   action: string;
   resource?: string | null;
   ip?: string | null;
+  prev_hash?: string | null;
+  hmac_signature?: string | null;
   created_at: string;
+}
+
+export interface AuditChainVerification {
+  valid: boolean;
+  checked_count: number;
+  total_records: number;
+  head_signature: string;
+  broken_at_id?: number | null;
+  reason?: string | null;
+}
+
+export interface ThreatIOC {
+  id?: number | null;
+  ioc_type: 'domain' | 'keyword' | 'sender';
+  value: string;
+  severity: string;
+  description: string;
+  source: 'builtin' | 'custom';
+  is_active: boolean;
+  created_at?: string | null;
 }
 
 export interface AdminUser {
@@ -203,4 +225,4 @@ export interface IncidentReport {
     recommended_actions: string;
   };
   disclaimer: string;
-}
+}

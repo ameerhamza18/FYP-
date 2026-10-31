@@ -1,36 +1,37 @@
-"""Social-engineering technique classifier.
+"""Social-engineering technique classifier (FR-05).
 
-Detects the psychological manipulation techniques used by scammers:
-Authority, Urgency, Fear, Reward, Scarcity, Trust (impersonation),
+Detects the eight psychological manipulation categories used by scammers:
+Authority, Urgency, Fear, Reward, Scarcity, Trust Impersonation,
 Financial Pressure, and Credential Harvesting.
 
-Each technique has graded lexicons; intensity is derived from the number and
-strength of matched evidence. This is deterministic (explainable) and runs
-before — and independently of — the ML model.
+Each category is rated as NONE, LOW, MEDIUM, or HIGH based on graded bilingual
+(English + Roman Urdu) lexicons, running deterministically alongside the ML model.
 """
 import re
 from typing import Dict, List, Tuple
 
+from services.nlp.preprocessing import fold_homoglyphs
+
 TECHNIQUES: Dict[str, List[Tuple[str, int]]] = {
     # pattern, weight
     "authority": [
-        (r"\b(i[' ]?m|i am|this is) (from|calling from|the head of)\s+(your\s+)?(bank|fbr|police|nadra|customs|courier|company)\b", 3),
-        (r"\b(bank|fbr|police|nadra|hbl|ubl|meezan|jazzcash|easypaisa|easy paisa|telenor|jazz|zong|ufone|ptcl|ssgc|wapda|leo|fia)\s+(official|officer|team|department|head)\b", 2),
-        (r"\b(main|hum)\s+(bank|fbr|police|nadra|easypaisa|jazzcash|head\s+office)\s+(se|sy)\s+(bol\s+raha|rabta)\b", 3),
+        (r"\b(i[' ]?m|i am|this is) (from|calling from|the head of)\s+(your\s+)?(bank|sbp|raast|fbr|police|nadra|customs|courier|company)\b", 3),
+        (r"\b(bank|sbp|raast|fbr|police|nadra|hbl|ubl|meezan|jazzcash|easypaisa|easy paisa|telenor|jazz|zong|ufone|ptcl|ssgc|wapda|lesco|fia)\s+(official|officer|team|department|head|helpline)\b", 2),
+        (r"\b(main|hum)\s+(bank|sbp|raast|fbr|police|nadra|easypaisa|jazzcash|head\s+office)\s+(se|sy)\s+(bol\s+raha|rabta)\b", 3),
         (r"\bcustomer\s+(service|care|support)\s+(representative|agent)\b", 1),
         (r"\b(ceo|director|manager|chairman|principal|professor)\s+(of|at)\b", 1),
-        (r"\bgovernment|court|federal|central\s+(bank|authority)\b", 2),
+        (r"\bgovernment|state\s+bank|court|federal|central\s+(bank|authority)\b", 2),
     ],
     "urgency": [
         (r"\b(within|in)\s+\d+\s*(minutes?|mins?|hours?|hrs?|days?)\b", 3),
         (r"\b(act|respond|verify|confirm|call|click|pay|renew|register)\s+(now|immediately|right away|today)\b", 3),
-        (r"\b(fori|abhi|fauran|jald\s+se\s+jald)\s+(verify|confirm|rabta|call|bhejen|karain|karein)\b", 3),
+        (r"\b(fori|foran|abhi|fauran|jald\s+se\s+jald)\s+(verify|confirm|tasdeeq|rabta|call|bhejen|karain|karein)\b", 3),
         (r"\b(urgent|urgently|asap|last\s+chance|final\s+(notice|warning|reminder)|expires?\s+(today|tomorrow|soon)|time\s+sensitive)\b", 2),
         (r"\b\d+\s*(hours?|hrs?|ghantay)\s*(left|remaining|me|main|andar)\b", 2),
     ],
     "fear": [
-        (r"\b(account|card|sim|wallet|id)\s+(will\s+be|has\s+been|is)\s+(blocked|blocked!|suspended|suspended!|closed|deactivated|frozen|terminated)\b", 3),
-        (r"\b(account|card|sim|wallet)\s+(block|band|suspend)\s+(ho\s+gaya|kar\s+diya|ho\s+jayega|ho\s+jaega)\b", 3),
+        (r"\b(account|card|sim|wallet|raast\s+id|id)\s+(will\s+be|has\s+been|is)\s+(blocked|blocked!|suspended|suspended!|closed|deactivated|frozen|terminated)\b", 3),
+        (r"\b(account|card|sim|wallet|raast)\s+(block|band|suspend)\s+(ho\s+gaya|ho\s+chuka|kar\s+diya|ho\s+jayega|ho\s+jaega)\b", 3),
         (r"\b(legal\s+)?action\s+(will\s+be\s+)?taken\s+against\s+you\b", 3),
         (r"\b(qanooni\s+karwai|police\s+case|fir|warrant)\b", 3),
         (r"\b(arrest|arrested|warrant|fir|case\s+(registered|filed)|jail|police\s+station)\b", 2),
@@ -38,11 +39,11 @@ TECHNIQUES: Dict[str, List[Tuple[str, int]]] = {
     ],
     "reward": [
         (r"\b(you('?ve| have)?\s+(won|been\s+selected\s+(for|to\s+receive)))\b", 3),
-        (r"\b(inam|lottery|prize|cashback)\s+(jeet\s+liya|mubarak|mil\s+gaya)\b", 3),
-        (r"\b(bisp|ehsaas|benazir|jeeto\s+pakistan)\s+(scheme|program|inam|money)\b", 3),
+        (r"\b(inam|inaam|lottery|prize|cashback)\s+(jeet\s+liya|jeet\s+chuke|mubarak|mil\s+gaya)\b", 3),
+        (r"\b(bisp|ehsaas|benazir|raast\s+subsidy|jeeto\s+pakistan)\s+(scheme|program|inam|inaam|imdad|money|grant)\b", 3),
         (r"\b(prize|lottery|giveaway|lucky\s+(draw|winner)|reward|cashback\s+offer)\b", 2),
         (r"\b(free|claim\s+your|gift)\b.{0,25}\b(iphone|prize|voucher|coupon|data|mbs|bundle)\b", 2),
-        (r"\bcongratulations\b", 1),
+        (r"\b(congratulations|mubarak\s+ho)\b", 1),
     ],
     "scarcity": [
         (r"\bonly\s+\d+\s*(spots?|slots?|positions?|seats?|accounts?)\s+(left|remaining|available)\b", 3),
@@ -50,31 +51,42 @@ TECHNIQUES: Dict[str, List[Tuple[str, int]]] = {
         (r"\b(first\s+\d+\s+(people|users|customers|responders))\b", 2),
     ],
     "trust_impersonation": [
-        (r"\b(official|authorized|verified|genuine|authentic)\s+(app|website|link|portal|account)\b", 2),
+        (r"\b(official|authorized|verified|genuine|authentic)\s+(app|website|link|portal|account|raast\s+portal)\b", 2),
         (r"\bfrom\s+the\s+desk\s+of\b", 2),
-        (r"\b(dear\s+(customer|valued\s+customer|user|account\s+holder))\b", 2),
+        (r"\b(dear\s+(customer|valued\s+customer|user|account\s+holder)|mohtaram\s+sarif)\b", 2),
         (r"\bsincerely\b.{0,40}\b(bank|team|support|management)\b", 1),
     ],
     "financial_pressure": [
         (r"\b(pay|send|transfer|deposit|submit)\s+(the\s+)?(fee|amount|money|rs\.?\s?\d|pkr|cash|advance|registration\s+fee|processing\s+fee|tax|security\s+deposit)\b", 3),
-        (r"\b(pese|paise|fees?|amount|tax|advance)\s+(send|bhejen|transfer|jama)\s+(karein|karain|karo)\b", 3),
-        (r"\b(jazzcash|easypaisa|easy\s+paisa|bank\s+transfer|wallet|tcs|premium\s+number)\b.{0,30}\b\d{4,}\b", 2),
+        (r"\b(pese|paise|fees?|amount|tax|advance)\s+(send|bhejen|bhej\s+dein|transfer|jama)\s*(karein|karain|karo)?\b", 3),
+        (r"\b(jazzcash|easypaisa|easy\s+paisa|raast|sadapay|nayapay|bank\s+transfer|wallet|tcs|premium\s+number)\b.{0,30}\b\d{4,}\b", 2),
         (r"\b(invest)\s+(rs|pkr|\$)?\s?\d[\d,\.]*\b", 2),
-        (r"\b(send|transfer)\s+money\s+(to|at)\b", 2),
+        (r"\b(send|transfer)\s+money\s+(to|at|via\s+raast)\b", 2),
     ],
     "credential_harvesting": [
-        (r"\b(enter|provide|share|confirm|update|verify)\s+(your\s+)?(password|pin|otp|cvv|cvc|card\s+number|account\s+(number|details)|login\s+(details|credentials)|credentials)\b", 3),
-        (r"\b(otp|pin|password|code)\s+(share|send|bataen|batao|batai|bhejen)\s+(karein|karain|karo)?\b", 3),
+        (r"\b(enter|provide|share|confirm|update|verify)\s+(your\s+)?(password|pin|otp|cvv|cvc|card\s+number|account\s+(number|details)|raast\s+pin|login\s+(details|credentials)|credentials)\b", 3),
+        (r"\b(otp|pin|password|code)\s+(share|send|bataen|batao|batai|bhejen|darj)\s*(karein|karain|karo)?\b", 3),
         (r"\b(otp|one[\s\-]?time\s+(password|code)|pin)\b.{0,30}\b(share|send|tell|provide)\b", 3),
         (r"\b(cvv|cvc|atm\s+pin|card\s+pin|internet\s+banking\s+password)\b", 2),
         (r"\blogin\s+(via|through)\s+the\s+(link|portal)\b", 1),
     ],
 }
 
-INTENSITY_THRESHOLDS = [(0, "LOW"), (3, "MEDIUM"), (6, "HIGH")]
+COMPILED_TECHNIQUES: Dict[str, List[Tuple[re.Pattern, int]]] = {
+    tech: [(re.compile(pat, re.I), weight) for pat, weight in rules]
+    for tech, rules in TECHNIQUES.items()
+}
+
+SE_TAXONOMY_CATEGORIES: List[str] = [
+    tech.replace("_", " ").title() for tech in TECHNIQUES.keys()
+]
+
+INTENSITY_THRESHOLDS = [(0, "NONE"), (1, "LOW"), (3, "MEDIUM"), (6, "HIGH")]
 
 
 def _intensity(score: int) -> str:
+    if score <= 0:
+        return "NONE"
     if score >= 6:
         return "HIGH"
     if score >= 3:
@@ -82,39 +94,49 @@ def _intensity(score: int) -> str:
     return "LOW"
 
 
-def detect_techniques(text: str) -> List[Dict]:
-    """Return detected SE techniques with intensity + evidence snippets."""
-    findings: List[Dict] = []
-    if not text:
-        return findings
-    lowered = text.lower()
-    for technique, patterns in TECHNIQUES.items():
+def evaluate_taxonomy(text: str) -> List[Dict]:
+    """Score all 8 SE categories and rate each as NONE, LOW, MEDIUM, or HIGH (FR-05)."""
+    lowered = fold_homoglyphs(text or "").lower()
+    taxonomy: List[Dict] = []
+    for technique, patterns in COMPILED_TECHNIQUES.items():
         score = 0
         evidence: List[str] = []
-        for pattern, weight in patterns:
-            m = re.search(pattern, lowered)
-            if m:
-                score += weight
-                snippet = m.group(0)
-                if snippet not in evidence:
-                    evidence.append(snippet)
-        if score > 0:
-            findings.append(
-                {
-                    "technique": technique.replace("_", " ").title(),
-                    "intensity": _intensity(score),
-                    "score": score,
-                    "evidence": "; ".join(evidence[:3]),
-                }
-            )
-    # Sort strongest manipulation first.
-    findings.sort(key=lambda f: f["score"], reverse=True)
-    return findings
+        if lowered:
+            for compiled_pat, weight in patterns:
+                m = compiled_pat.search(lowered)
+                if m:
+                    score += weight
+                    snippet = m.group(0)
+                    if snippet not in evidence:
+                        evidence.append(snippet)
+        taxonomy.append({
+            "technique": technique.replace("_", " ").title(),
+            "intensity": _intensity(score),
+            "score": score,
+            "evidence": "; ".join(evidence[:3]) if evidence else None,
+        })
+    taxonomy.sort(key=lambda f: f["score"], reverse=True)
+    return taxonomy
+
+
+def detect_techniques(text: str, include_none: bool = False) -> List[Dict]:
+    """Return detected SE techniques with intensity + evidence snippets.
+
+    When ``include_none=True``, returns all 8 categories including ``NONE``.
+    By default returns only active (>0) manipulation signals so callers and
+    persisted ``SEFinding`` rows stay concise.
+    """
+    if not text and not include_none:
+        return []
+    full = evaluate_taxonomy(text)
+    if include_none:
+        return full
+    return [f for f in full if f["score"] > 0]
 
 
 def se_risk_score(findings: List[Dict]) -> float:
     """0-100 risk contribution of the social-engineering findings."""
     if not findings:
         return 0.0
-    intensity_weight = {"LOW": 6, "MEDIUM": 14, "HIGH": 25}
-    return min(100.0, sum(intensity_weight[f["intensity"]] for f in findings))
+    intensity_weight = {"NONE": 0, "LOW": 6, "MEDIUM": 14, "HIGH": 25}
+    return min(100.0, sum(intensity_weight.get(f["intensity"], 0) for f in findings))

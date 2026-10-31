@@ -46,7 +46,7 @@ android {
 
     defaultConfig {
         applicationId "com.trustlayer.app"
-        minSdk 21
+        minSdk 26
         targetSdk 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
