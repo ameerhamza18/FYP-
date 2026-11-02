@@ -1,19 +1,12 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-/// Ultra-premium 3D metallic/chrome cybersecurity shield widget.
-///
-/// Faithfully renders the 3D faceted metallic shield from `mobile-app.jpg`:
-/// - Multi-layered beveled chrome rim with specular lighting
-/// - Faceted left/right halves with contrasting light/shadow gradients
-/// - Inner cyber-glass panel with subtle reflections
-/// - Circuit board etched traces and glowing node junctions behind the shield
-/// - Concentric holographic radar rings and ambient cyan glow halo
+/// Soft ceramic & pastel glass 3D shield emblem styled for the Shieldly AI light theme.
 class CyberShield3D extends StatelessWidget {
   const CyberShield3D({
     super.key,
     this.size = 180,
-    this.glowColor = const Color(0xFF38BDF8),
+    this.glowColor = const Color(0xFF6D5DFB),
     this.isPulsing = true,
     this.statusText,
   });
@@ -31,27 +24,23 @@ class CyberShield3D extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Background ambient circular glow
           Container(
-            width: size * 0.85,
-            height: size * 0.85,
+            width: size * 0.78,
+            height: size * 0.78,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: glowColor.withOpacity(0.28),
-                  blurRadius: size * 0.35,
-                  spreadRadius: size * 0.05,
+                  color: glowColor.withOpacity(0.18),
+                  blurRadius: size * 0.28,
+                  spreadRadius: size * 0.04,
                 ),
               ],
             ),
           ),
-          // Custom painted 3D Shield with circuit traces and holographic accents
           CustomPaint(
             size: Size(size, size),
-            painter: _CyberShieldPainter(
-              glowColor: glowColor,
-            ),
+            painter: _CyberShieldPainter(glowColor: glowColor),
           ),
         ],
       ),
@@ -60,9 +49,7 @@ class CyberShield3D extends StatelessWidget {
 }
 
 class _CyberShieldPainter extends CustomPainter {
-  _CyberShieldPainter({
-    required this.glowColor,
-  });
+  _CyberShieldPainter({required this.glowColor});
 
   final Color glowColor;
 
@@ -72,45 +59,38 @@ class _CyberShieldPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // 1. Draw subtle circuit traces behind the shield
-    _drawCircuitTraces(canvas, size, center);
+    _drawSoftRings(canvas, size, center);
 
-    // 2. Draw holographic calibrated arcs
-    _drawHoloRings(canvas, size, center);
-
-    // 3. Define 3D Shield geometry
-    // Dimensions relative to canvas center
-    final shieldWidth = w * 0.58;
-    final shieldHeight = h * 0.72;
+    final shieldWidth = w * 0.56;
+    final shieldHeight = h * 0.70;
     final shieldTop = (h - shieldHeight) / 2;
     final shieldLeft = (w - shieldWidth) / 2;
     final rect = Rect.fromLTWH(shieldLeft, shieldTop, shieldWidth, shieldHeight);
 
-    // Base shield path
     final shieldPath = _createShieldPath(rect);
 
-    // 4. Outer Metallic Bevel Shadow / Glow
+    // Soft elevated ceramic shadow
     final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.65)
+      ..color = const Color(0xFF16161A).withOpacity(0.12)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
-    canvas.drawPath(shieldPath, shadowPaint);
+    canvas.drawPath(shieldPath.shift(const Offset(0, 6)), shadowPaint);
 
-    // 5. Outer Bezel (Chrome / Dark Titanium Gradient)
+    // Outer Ceramic Bezel (Warm pearl -> periwinkle tint)
     final bezelPaint = Paint()
-      ..shader = LinearGradient(
+      ..shader = const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          const Color(0xFFE2E8F0), // Chrome specular highlight
-          const Color(0xFF64748B), // Slate metallic
-          const Color(0xFF1E293B), // Dark Titanium
-          const Color(0xFF0F172A), // Shadowed base
+          Color(0xFFFFFFFF),
+          Color(0xFFEEF1FE),
+          Color(0xFFD5DDFB),
+          Color(0xFFC3CEF8),
         ],
-        stops: const [0.0, 0.35, 0.7, 1.0],
+        stops: [0.0, 0.4, 0.75, 1.0],
       ).createShader(rect);
     canvas.drawPath(shieldPath, bezelPaint);
 
-    // 6. Outer Bezel Rim Stroke
+    // Outer Crisp Specular Rim
     final rimPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
@@ -118,144 +98,98 @@ class _CyberShieldPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.white.withOpacity(0.9),
-          glowColor.withOpacity(0.8),
-          const Color(0xFF0284C7).withOpacity(0.3),
-          Colors.white.withOpacity(0.1),
+          Colors.white,
+          glowColor.withOpacity(0.45),
+          glowColor.withOpacity(0.25),
         ],
-        stops: const [0.0, 0.3, 0.7, 1.0],
       ).createShader(rect);
     canvas.drawPath(shieldPath, rimPaint);
 
-    // 7. Inner Recessed Glass Facet (Left Half & Right Half for 3D depth)
+    // Inner Faceted Halves
     final innerRect = Rect.fromLTWH(
-      shieldLeft + shieldWidth * 0.08,
-      shieldTop + shieldHeight * 0.08,
-      shieldWidth * 0.84,
-      shieldHeight * 0.84,
+      shieldLeft + shieldWidth * 0.09,
+      shieldTop + shieldHeight * 0.09,
+      shieldWidth * 0.82,
+      shieldHeight * 0.82,
     );
 
     final leftHalfPath = _createLeftHalfShieldPath(innerRect);
     final rightHalfPath = _createRightHalfShieldPath(innerRect);
 
-    // Left Half: Lit side (reflects ambient cyber cyan & soft chrome light)
     final leftFacetPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          glowColor.withOpacity(0.35),
-          const Color(0xFF0E2338),
-          const Color(0xFF060D1A),
+          glowColor.withOpacity(0.88),
+          glowColor,
         ],
-        stops: const [0.0, 0.5, 1.0],
       ).createShader(innerRect);
     canvas.drawPath(leftHalfPath, leftFacetPaint);
 
-    // Right Half: Shadowed side (deep obsidian & navy reflections)
     final rightFacetPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topRight,
         end: Alignment.bottomLeft,
         colors: [
-          const Color(0xFF1E2D44),
-          const Color(0xFF08101E),
-          const Color(0xFF020610),
+          Color.lerp(glowColor, const Color(0xFF16161A), 0.18)!,
+          Color.lerp(glowColor, const Color(0xFF16161A), 0.32)!,
         ],
-        stops: const [0.0, 0.45, 1.0],
       ).createShader(innerRect);
     canvas.drawPath(rightHalfPath, rightFacetPaint);
 
-    // 8. Central 3D Ridge Highlight Line
+    // Central Ridge Highlight
     final centerRidgePaint = Paint()
-      ..color = Colors.white.withOpacity(0.7)
+      ..color = Colors.white.withOpacity(0.55)
       ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
     canvas.drawLine(
-      Offset(innerRect.center.dx, innerRect.top + 2),
-      Offset(innerRect.center.dx, innerRect.bottom - 4),
+      Offset(innerRect.center.dx, innerRect.top + 3),
+      Offset(innerRect.center.dx, innerRect.bottom - 5),
       centerRidgePaint,
     );
 
-    // 9. Diagonal Specular Glass Glare across left facet
-    final glarePath = Path();
-    glarePath.moveTo(innerRect.left + innerRect.width * 0.1, innerRect.top + innerRect.height * 0.2);
-    glarePath.lineTo(innerRect.center.dx, innerRect.top + 4);
-    glarePath.lineTo(innerRect.center.dx, innerRect.top + innerRect.height * 0.45);
-    glarePath.lineTo(innerRect.left + innerRect.width * 0.05, innerRect.top + innerRect.height * 0.55);
-    glarePath.close();
-
-    final glarePaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withOpacity(0.25),
-          Colors.white.withOpacity(0.0),
-        ],
-      ).createShader(innerRect);
-    canvas.drawPath(glarePath, glarePaint);
-
-    // 10. Center glowing diamond / core node
-    final corePaint = Paint()
-      ..color = glowColor
-      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 4);
-    canvas.drawCircle(Offset(innerRect.center.dx, innerRect.center.dy - 6), 3.5, corePaint);
+    // Center Sparkle Star (Shieldly AI signature motif)
+    _drawSparkle(
+      canvas,
+      Offset(innerRect.center.dx, innerRect.center.dy - 2),
+      innerRect.width * 0.20,
+    );
   }
 
-  void _drawCircuitTraces(Canvas canvas, Size size, Offset center) {
-    final tracePaint = Paint()
-      ..color = glowColor.withOpacity(0.22)
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke;
-
-    final dotPaint = Paint()
-      ..color = glowColor.withOpacity(0.4)
+  void _drawSparkle(Canvas canvas, Offset c, double r) {
+    final path = Path()
+      ..moveTo(c.dx, c.dy - r)
+      ..quadraticBezierTo(c.dx, c.dy, c.dx + r, c.dy)
+      ..quadraticBezierTo(c.dx, c.dy, c.dx, c.dy + r)
+      ..quadraticBezierTo(c.dx, c.dy, c.dx - r, c.dy)
+      ..quadraticBezierTo(c.dx, c.dy, c.dx, c.dy - r)
+      ..close();
+    final paint = Paint()
+      ..color = Colors.white
       ..style = PaintingStyle.fill;
-
-    final w = size.width;
-    final h = size.height;
-
-    // Left circuit trace
-    final pathL = Path();
-    pathL.moveTo(w * 0.04, h * 0.42);
-    pathL.lineTo(w * 0.16, h * 0.42);
-    pathL.lineTo(w * 0.22, h * 0.34);
-    pathL.lineTo(w * 0.28, h * 0.34);
-    canvas.drawPath(pathL, tracePaint);
-    canvas.drawCircle(Offset(w * 0.04, h * 0.42), 2.5, dotPaint);
-    canvas.drawCircle(Offset(w * 0.28, h * 0.34), 2.0, dotPaint);
-
-    // Right circuit trace
-    final pathR = Path();
-    pathR.moveTo(w * 0.96, h * 0.52);
-    pathR.lineTo(w * 0.84, h * 0.52);
-    pathR.lineTo(w * 0.78, h * 0.60);
-    pathR.lineTo(w * 0.72, h * 0.60);
-    canvas.drawPath(pathR, tracePaint);
-    canvas.drawCircle(Offset(w * 0.96, h * 0.52), 2.5, dotPaint);
-    canvas.drawCircle(Offset(w * 0.72, h * 0.60), 2.0, dotPaint);
+    canvas.drawPath(path, paint);
   }
 
-  void _drawHoloRings(Canvas canvas, Size size, Offset center) {
+  void _drawSoftRings(Canvas canvas, Size size, Offset center) {
     final ringPaint = Paint()
-      ..color = glowColor.withOpacity(0.12)
+      ..color = glowColor.withOpacity(0.14)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
+      ..strokeWidth = 1.2;
 
     final radius = size.width * 0.44;
     canvas.drawCircle(center, radius, ringPaint);
-    canvas.drawCircle(center, radius * 0.82, ringPaint);
+    canvas.drawCircle(center, radius * 0.84, ringPaint);
 
-    // Segmented outer arc
     final arcPaint = Paint()
-      ..color = glowColor.withOpacity(0.35)
+      ..color = glowColor.withOpacity(0.32)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 2.2;
 
     final arcRect = Rect.fromCircle(center: center, radius: radius);
-    canvas.drawArc(arcRect, -math.pi / 4, math.pi / 2, false, arcPaint);
-    canvas.drawArc(arcRect, 3 * math.pi / 4, math.pi / 2, false, arcPaint);
+    canvas.drawArc(arcRect, -math.pi / 4, math.pi / 2.4, false, arcPaint);
+    canvas.drawArc(arcRect, 3 * math.pi / 4, math.pi / 2.4, false, arcPaint);
   }
 
   Path _createShieldPath(Rect rect) {
@@ -266,29 +200,37 @@ class _CyberShieldPainter extends CustomPainter {
     final rightShoulder = Offset(rect.right, rect.top + rect.height * 0.35);
 
     path.moveTo(topCenter.dx, topCenter.dy);
-    // Top right curve to shoulder
     path.cubicTo(
-      rect.left + rect.width * 0.85, rect.top,
-      rightShoulder.dx, rect.top + rect.height * 0.08,
-      rightShoulder.dx, rightShoulder.dy,
+      rect.left + rect.width * 0.85,
+      rect.top,
+      rightShoulder.dx,
+      rect.top + rect.height * 0.08,
+      rightShoulder.dx,
+      rightShoulder.dy,
     );
-    // Right shoulder to bottom tip
     path.cubicTo(
-      rightShoulder.dx, rect.top + rect.height * 0.68,
-      rect.left + rect.width * 0.75, rect.bottom - rect.height * 0.12,
-      bottomTip.dx, bottomTip.dy,
+      rightShoulder.dx,
+      rect.top + rect.height * 0.68,
+      rect.left + rect.width * 0.75,
+      rect.bottom - rect.height * 0.12,
+      bottomTip.dx,
+      bottomTip.dy,
     );
-    // Bottom tip to left shoulder
     path.cubicTo(
-      rect.left + rect.width * 0.25, rect.bottom - rect.height * 0.12,
-      leftShoulder.dx, rect.top + rect.height * 0.68,
-      leftShoulder.dx, leftShoulder.dy,
+      rect.left + rect.width * 0.25,
+      rect.bottom - rect.height * 0.12,
+      leftShoulder.dx,
+      rect.top + rect.height * 0.68,
+      leftShoulder.dx,
+      leftShoulder.dy,
     );
-    // Left shoulder to top center
     path.cubicTo(
-      leftShoulder.dx, rect.top + rect.height * 0.08,
-      rect.left + rect.width * 0.15, rect.top,
-      topCenter.dx, topCenter.dy,
+      leftShoulder.dx,
+      rect.top + rect.height * 0.08,
+      rect.left + rect.width * 0.15,
+      rect.top,
+      topCenter.dx,
+      topCenter.dy,
     );
     path.close();
     return path;
@@ -303,14 +245,20 @@ class _CyberShieldPainter extends CustomPainter {
     path.moveTo(topCenter.dx, topCenter.dy);
     path.lineTo(bottomTip.dx, bottomTip.dy);
     path.cubicTo(
-      rect.left + rect.width * 0.25, rect.bottom - rect.height * 0.12,
-      leftShoulder.dx, rect.top + rect.height * 0.68,
-      leftShoulder.dx, leftShoulder.dy,
+      rect.left + rect.width * 0.25,
+      rect.bottom - rect.height * 0.12,
+      leftShoulder.dx,
+      rect.top + rect.height * 0.68,
+      leftShoulder.dx,
+      leftShoulder.dy,
     );
     path.cubicTo(
-      leftShoulder.dx, rect.top + rect.height * 0.08,
-      rect.left + rect.width * 0.15, rect.top,
-      topCenter.dx, topCenter.dy,
+      leftShoulder.dx,
+      rect.top + rect.height * 0.08,
+      rect.left + rect.width * 0.15,
+      rect.top,
+      topCenter.dx,
+      topCenter.dy,
     );
     path.close();
     return path;
@@ -324,14 +272,20 @@ class _CyberShieldPainter extends CustomPainter {
 
     path.moveTo(topCenter.dx, topCenter.dy);
     path.cubicTo(
-      rect.left + rect.width * 0.85, rect.top,
-      rightShoulder.dx, rect.top + rect.height * 0.08,
-      rightShoulder.dx, rightShoulder.dy,
+      rect.left + rect.width * 0.85,
+      rect.top,
+      rightShoulder.dx,
+      rect.top + rect.height * 0.08,
+      rightShoulder.dx,
+      rightShoulder.dy,
     );
     path.cubicTo(
-      rightShoulder.dx, rect.top + rect.height * 0.68,
-      rect.left + rect.width * 0.75, rect.bottom - rect.height * 0.12,
-      bottomTip.dx, bottomTip.dy,
+      rightShoulder.dx,
+      rect.top + rect.height * 0.68,
+      rect.left + rect.width * 0.75,
+      rect.bottom - rect.height * 0.12,
+      bottomTip.dx,
+      bottomTip.dy,
     );
     path.lineTo(topCenter.dx, topCenter.dy);
     path.close();

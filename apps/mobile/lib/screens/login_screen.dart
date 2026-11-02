@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../services/api_client.dart';
 import '../main.dart';
+import '../services/api_client.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  /// True when we arrived here because the backend rejected an expired token, so
-  /// the user is told why instead of being silently dropped on a login form.
   final bool sessionExpired;
   const LoginScreen({super.key, this.sessionExpired = false});
 
@@ -28,8 +26,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // Routing for a stored token is decided by SplashScreen._route, which also
-    // verifies the token is still accepted before entering the app.
     if (widget.sessionExpired) {
       _error = 'Your session expired. Please sign in again.';
     }
@@ -47,12 +43,13 @@ class _LoginScreenState extends State<LoginScreen> {
     final saved = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: TrustLayerColors.surfaceElevated,
+        backgroundColor: TrustLayerColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
         title: Text(
           'API Server URL',
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
             color: TrustLayerColors.textPrimary,
           ),
         ),
@@ -61,20 +58,29 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Enter your PC Wi-Fi IP running Docker on port 8001\n(e.g. http://192.168.1.15:8001):',
-              style: const TextStyle(color: TrustLayerColors.textSecondary, fontSize: 12),
+              'Enter your PC Wi-Fi IP running TrustLayer on port 8001\n(e.g. http://192.168.1.15:8001):',
+              style: GoogleFonts.plusJakartaSans(
+                color: TrustLayerColors.textSecondary,
+                fontSize: 12.5,
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             TextField(
               controller: controller,
               keyboardType: TextInputType.url,
-              style: const TextStyle(color: TrustLayerColors.textPrimary, fontSize: 13),
+              style: GoogleFonts.plusJakartaSans(
+                color: TrustLayerColors.textPrimary,
+                fontSize: 13.5,
+              ),
               decoration: InputDecoration(
                 hintText: 'http://192.168.1.15:8001',
                 hintStyle: const TextStyle(color: TrustLayerColors.textMuted),
                 filled: true,
-                fillColor: TrustLayerColors.surface,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                fillColor: TrustLayerColors.surfaceElevated,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
           ],
@@ -82,9 +88,19 @@ class _LoginScreenState extends State<LoginScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(''),
-            child: const Text('Reset Default'),
+            child: const Text(
+              'Reset Default',
+              style: TextStyle(color: TrustLayerColors.textSecondary),
+            ),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: TrustLayerColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
             child: const Text('Save'),
           ),
@@ -99,9 +115,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
-      // The client trims/validates these, so pass them through untouched.
       if (_isRegister) {
         await _api.register(_email.text, _password.text);
       } else {
@@ -113,7 +131,9 @@ class _LoginScreenState extends State<LoginScreen> {
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Something went wrong. Please try again.');
+      if (mounted) {
+        setState(() => _error = 'Something went wrong. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -123,208 +143,340 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: TrustLayerColors.background,
-      body: Center(
+      body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Tactical Shield Orb
+              // Warm Cream Header Block (Shieldly AI Top Sheet)
               Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: TrustLayerColors.surfaceElevated,
-                  border: Border.all(
-                    color: TrustLayerColors.primary.withOpacity(0.5),
-                    width: 1.5,
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
+                decoration: const BoxDecoration(
+                  color: TrustLayerColors.headerWarm,
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(36),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: TrustLayerColors.primary.withOpacity(0.2),
-                      blurRadius: 24,
-                      spreadRadius: 2,
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 66,
+                      height: 66,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 30,
+                          color: TrustLayerColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'TrustLayer AI',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        color: TrustLayerColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Instant protection against scams, links & phishing',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: TrustLayerColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    // Sign In / Register Pill Switcher
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.75),
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() {
+                                _isRegister = false;
+                                _error = null;
+                              }),
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 11),
+                                decoration: BoxDecoration(
+                                  color: !_isRegister
+                                      ? TrustLayerColors.primary
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Sign In',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: !_isRegister
+                                          ? Colors.white
+                                          : TrustLayerColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() {
+                                _isRegister = true;
+                                _error = null;
+                              }),
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 11),
+                                decoration: BoxDecoration(
+                                  color: _isRegister
+                                      ? TrustLayerColors.primary
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Register',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: _isRegister
+                                          ? Colors.white
+                                          : TrustLayerColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.shield_outlined,
-                    size: 38,
-                    color: TrustLayerColors.primary,
-                  ),
-                ),
               ),
-              const SizedBox(height: 20),
-              Text(
-                'TRUSTLAYER',
-                style: GoogleFonts.inter(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 2.5,
-                  color: TrustLayerColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'ENTERPRISE CYBER DEFENSE GATEWAY',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 9.5,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w600,
-                  color: TrustLayerColors.primary.withOpacity(0.8),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: TrustLayerColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: TrustLayerColors.surfaceBorder),
-                ),
-                child: Text(
-                  'TLS 1.3 // ZERO-TRUST AUTHENTICATION',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 8.5,
-                    color: TrustLayerColors.textMuted,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 36),
-              TextField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(color: TrustLayerColors.textPrimary, fontSize: 13.5),
-                decoration: InputDecoration(
-                  labelText: 'Operator Identity (Email)',
-                  labelStyle: const TextStyle(color: TrustLayerColors.textSecondary, fontSize: 13),
-                  prefixIcon: const Icon(Icons.alternate_email_rounded, color: TrustLayerColors.textMuted, size: 20),
-                  filled: true,
-                  fillColor: TrustLayerColors.surface,
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: TrustLayerColors.surfaceBorder),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: TrustLayerColors.primary, width: 1.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _password,
-                obscureText: _obscure,
-                style: const TextStyle(color: TrustLayerColors.textPrimary, fontSize: 13.5),
-                inputFormatters: [FilteringTextInputFormatter.singleLineFormatter],
-                decoration: InputDecoration(
-                  labelText: 'Passcode / Cryptographic Token',
-                  labelStyle: const TextStyle(color: TrustLayerColors.textSecondary, fontSize: 13),
-                  prefixIcon: const Icon(Icons.key_rounded, color: TrustLayerColors.textMuted, size: 20),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: TrustLayerColors.textMuted,
-                      size: 20,
-                    ),
-                    tooltip: _obscure ? 'Show passcode' : 'Hide passcode',
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  ),
-                  filled: true,
-                  fillColor: TrustLayerColors.surface,
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: TrustLayerColors.surfaceBorder),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: TrustLayerColors.primary, width: 1.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              if (_error != null)
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(12),
+
+              // Crisp White Auth Card
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: TrustLayerColors.critical.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: TrustLayerColors.critical.withOpacity(0.4)),
+                    color: TrustLayerColors.surface,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF16161A).withOpacity(0.04),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                  child: Row(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.error_outline_rounded,
-                          color: TrustLayerColors.critical, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(color: TrustLayerColors.critical, fontSize: 12),
+                      Text(
+                        _isRegister ? 'Create your account' : 'Welcome back',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: TrustLayerColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isRegister
+                            ? 'Start scanning messages, links & screenshots.'
+                            : 'Sign in to view your scan history & live guard.',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12.5,
+                          color: TrustLayerColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _email,
+                        keyboardType: TextInputType.emailAddress,
+                        style: GoogleFonts.plusJakartaSans(
+                          color: TrustLayerColors.textPrimary,
+                          fontSize: 14,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Email address',
+                          labelStyle: const TextStyle(
+                            color: TrustLayerColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.mail_outline_rounded,
+                            color: TrustLayerColors.textSecondary,
+                            size: 20,
+                          ),
+                          filled: true,
+                          fillColor: TrustLayerColors.surfaceElevated,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: const BorderSide(
+                              color: TrustLayerColors.primary,
+                              width: 1.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _password,
+                        obscureText: _obscure,
+                        style: GoogleFonts.plusJakartaSans(
+                          color: TrustLayerColors.textPrimary,
+                          fontSize: 14,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.singleLineFormatter,
+                        ],
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          labelStyle: const TextStyle(
+                            color: TrustLayerColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.lock_outline_rounded,
+                            color: TrustLayerColors.textSecondary,
+                            size: 20,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscure
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: TrustLayerColors.textSecondary,
+                              size: 20,
+                            ),
+                            tooltip:
+                                _obscure ? 'Show password' : 'Hide password',
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
+                          ),
+                          filled: true,
+                          fillColor: TrustLayerColors.surfaceElevated,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: const BorderSide(
+                              color: TrustLayerColors.primary,
+                              width: 1.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      if (_error != null)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: TrustLayerColors.pillScamBg,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.error_outline_rounded,
+                                color: TrustLayerColors.critical,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _error!,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: TrustLayerColors.critical,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: TrustLayerColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(26),
+                            ),
+                            elevation: 0,
+                          ),
+                          onPressed: _busy ? null : _submit,
+                          child: _busy
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  _isRegister ? 'Create Account' : 'Sign In',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: TrustLayerColors.primary,
-                    foregroundColor: const Color(0xFF040711),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
-                  ),
-                  onPressed: _busy ? null : _submit,
-                  child: _busy
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF040711)),
-                        )
-                      : Text(
-                          _isRegister ? 'INITIALIZE CREDENTIALS' : 'AUTHENTICATE & ENTER',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                ),
               ),
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: () => setState(() { _isRegister = !_isRegister; _error = null; }),
-                child: Text(
-                  _isRegister
-                      ? 'EXISTING OPERATOR? PROCEED TO SIGN IN'
-                      : 'NEW OPERATOR? REQUEST CREDENTIALS',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 11,
-                    letterSpacing: 0.8,
-                    fontWeight: FontWeight.w600,
-                    color: TrustLayerColors.textSecondary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
+
               TextButton.icon(
                 onPressed: _configureServerUrl,
-                icon: const Icon(Icons.settings_ethernet_rounded, size: 14, color: TrustLayerColors.textMuted),
+                icon: const Icon(
+                  Icons.tune_rounded,
+                  size: 15,
+                  color: TrustLayerColors.textMuted,
+                ),
                 label: Text(
-                  'SERVER: ${ApiConfig.baseUrl}',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 10,
+                  'Server: ${ApiConfig.baseUrl}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
                     color: TrustLayerColors.textMuted,
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
             ],
           ),
         ),

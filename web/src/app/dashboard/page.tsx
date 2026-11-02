@@ -1,25 +1,29 @@
 'use client';
 
 /**
- * TrustLayer SOC Command Center — Campaign Correlation, IOC Control & Cryptographic Audit.
+ * TrustLayer SOC Command Center — Warm Editorial Bento Architecture (RevenueX style).
  *
- * Implements the 3D cybersecurity SOC Cockpit:
- * - Top Cockpit Header: TrustLayer | Campaign Correlation Engine with live sync & CSV export.
- * - Left Panel: Search filter, Live Threat Feed, Dynamic Technique Meters, Campaign Telemetry & Waveforms.
- * - Center Stage: Live 3D Vector Nodes Map (Three.js), Active Threat Header, Campaign Metadata & Tactical Triggers.
- * - Right Panel: Vector Nodes Star-Correlation Radar, Live Khatra Level Risk Shield (3D), and Indicator Legend.
- * - Lower Operations Deck: 14-Day Trend, Campaign Registry, Dynamic IOC Blocklist Controls (FR-12),
- *   HMAC-Chained Audit Trail with Live Tamper Verification (FR-10), & RBAC Operator Roster.
+ * Preserves 100% of SOC capabilities:
+ * - Live telemetry stats, 14-day TrendChart, and Most-Abused TechniqueBars
+ * - Searchable & sortable Live Threat Telemetry table with expandable snippets
+ * - Interactive 3D Correlation Topology (VectorNodesMap3D) & RiskShield3D with fullscreen mode
+ * - Correlated Attack Campaign Registry
+ * - Dynamic IOC Blocklist CRUD & Runtime Sync (FR-12)
+ * - Cryptographic HMAC-SHA256 Audit Ledger with live chain verification & CSV export (FR-10)
+ * - RBAC Operator Roster (role toggle, activate/deactivate, delete)
  */
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, useMemo } from 'react';
-import Footer from '@/components/Footer';
 import TrendChart from '@/components/dashboard/TrendChart';
 import TechniqueBars from '@/components/dashboard/TechniqueBars';
 import VectorNodesMap3D, { VectorNode } from '@/components/3d/VectorNodesMap3D';
 import RiskShield3D from '@/components/3d/RiskShield3D';
-import { EmptyState, RiskBadge } from '@/components/ui';
+import NotificationTray from '@/components/NotificationTray';
+import ThemeToggle from '@/components/ThemeToggle';
+import { BTN, CARD, EmptyState, Logo, RiskBadge } from '@/components/ui';
 import { api } from '@/lib/api';
-import { RequireAuth } from '@/lib/auth';
+import { RequireAuth, useAuth } from '@/lib/auth';
 import { formatDateTime, formatNumber, relativeTime } from '@/lib/presentation';
 import type {
   AdminAnalysis,
@@ -34,180 +38,107 @@ import type {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-/* -------------------------------------------------------------- sub-views */
+/* ------------------------------------------------ RevenueX vertical tick bar */
 
-function SegmentedMeter({
-  label,
-  pct,
-  color = 'cyan',
-}: {
-  label: string;
-  pct: number;
-  color?: 'cyan' | 'ruby' | 'amber';
-}) {
+function SegmentedTickBar({ pct }: { pct: number }) {
   const clamped = Math.max(0, Math.min(100, Math.round(pct)));
-  const totalSegments = 14;
-  const activeCount = Math.round((clamped / 100) * totalSegments);
+  const totalTicks = 34;
+  const activeCount = Math.round((clamped / 100) * totalTicks);
 
   return (
-    <div className="flex items-center justify-between gap-3 text-xs font-mono">
-      <span className="text-slate-300 w-28 truncate" title={label}>
-        {label}
-      </span>
-      <div className="flex items-center gap-2">
-        <div className="flex gap-[3px]">
-          {Array.from({ length: totalSegments }).map((_, idx) => (
-            <span
-              key={idx}
-              className={`h-3 w-[3px] rounded-[1px] transition-colors ${
-                idx < activeCount
-                  ? color === 'ruby'
-                    ? 'bg-rose-500 shadow-[0_0_6px_#f43f5e]'
-                    : color === 'amber'
-                    ? 'bg-amber-400 shadow-[0_0_6px_#fbbf24]'
-                    : 'bg-sky-400 shadow-[0_0_6px_#38bdf8]'
-                  : 'bg-slate-800'
-              }`}
-            />
-          ))}
-        </div>
-        <span className="w-10 text-right font-bold text-slate-200">{clamped}%</span>
-      </div>
+    <div className="flex items-center gap-[3px] flex-1 justify-end" aria-hidden>
+      {Array.from({ length: totalTicks }).map((_, idx) => (
+        <span
+          key={idx}
+          className={`h-6 w-[3px] rounded-full transition-colors ${
+            idx < activeCount
+              ? 'bg-gradient-to-b from-[#A855F7] to-[#7E22CE]'
+              : 'bg-border-default'
+          }`}
+        />
+      ))}
     </div>
   );
 }
 
-function WaveformCanvas() {
-  return (
-    <div className="h-10 w-full overflow-hidden rounded border border-sky-900/30 bg-slate-950/80 p-1">
-      <svg className="h-full w-full" preserveAspectRatio="none" viewBox="0 0 200 40">
-        <path
-          d="M 0 20 Q 20 5, 40 20 T 80 20 T 120 10 T 160 30 T 200 20"
-          fill="none"
-          stroke="#0284c7"
-          strokeWidth="1.5"
-          className="opacity-70"
-        />
-        <path
-          d="M 0 20 Q 30 35, 60 20 T 100 20 T 140 32 T 170 8 T 200 20"
-          fill="none"
-          stroke="#38bdf8"
-          strokeWidth="1.2"
-          className="opacity-90"
-        />
-      </svg>
-    </div>
-  );
-}
-
-function WaveformPulse() {
-  return (
-    <svg width="80" height="20" viewBox="0 0 80 20" fill="none" stroke="#38bdf8" strokeWidth="1.5">
-      <path d="M0 10 H15 V5 H25 V15 H35 V10 H45 V5 H55 V15 H65 V10 H80" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function WaveformSine() {
-  return (
-    <svg width="80" height="20" viewBox="0 0 80 20" fill="none" stroke="#22c55e" strokeWidth="1.5">
-      <path d="M0 10 Q 10 0, 20 10 T 40 10 T 60 10 T 80 10" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function WaveformBars() {
-  return (
-    <svg width="80" height="20" viewBox="0 0 80 20" fill="none">
-      <rect x="0" y="10" width="4" height="10" fill="#f43f5e" />
-      <rect x="8" y="5" width="4" height="15" fill="#f43f5e" />
-      <rect x="16" y="12" width="4" height="8" fill="#f43f5e" />
-      <rect x="24" y="2" width="4" height="18" fill="#f43f5e" />
-      <rect x="32" y="8" width="4" height="12" fill="#f43f5e" />
-      <rect x="40" y="14" width="4" height="6" fill="#f43f5e" />
-      <rect x="48" y="7" width="4" height="13" fill="#f43f5e" />
-      <rect x="56" y="10" width="4" height="10" fill="#f43f5e" />
-      <rect x="64" y="4" width="4" height="16" fill="#f43f5e" />
-      <rect x="72" y="9" width="4" height="11" fill="#f43f5e" />
-    </svg>
-  );
-}
+/* ----------------------------------------------------------- sub-components */
 
 function CampaignTable({ campaigns }: { campaigns: Campaign[] }) {
-  if (campaigns.length === 0) {
-    return (
-      <section className="tl-hud-glass rounded-xl overflow-hidden">
-        <div className="border-b border-sky-900/40 p-4">
-          <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
-            CAMPAIGN REGISTRY & CORRELATED ATTACKS
-          </h2>
+  return (
+    <section id="campaigns" className={`${CARD} overflow-hidden p-5 sm:p-6 scroll-mt-6`}>
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-foreground">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+          </span>
+          <div>
+            <h2 className="tl-serif text-xl text-foreground">Correlated Attack Campaigns</h2>
+            <p className="text-xs text-muted">Cross-user template & IOC clustering</p>
+          </div>
         </div>
+        <span className="rounded-full bg-surface-muted px-3 py-1 text-xs font-semibold text-foreground">
+          {campaigns.length} active signatures
+        </span>
+      </div>
+
+      {campaigns.length === 0 ? (
         <EmptyState
           title="No campaigns correlated"
           description="Repeated IOC or template signatures across users will be grouped here automatically."
         />
-      </section>
-    );
-  }
-
-  return (
-    <section className="tl-hud-glass rounded-xl overflow-hidden">
-      <div className="border-b border-sky-900/40 p-4 flex items-center justify-between">
-        <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
-          CAMPAIGN REGISTRY & CORRELATED ATTACKS
-        </h2>
-        <span className="font-mono text-[10px] text-slate-400">
-          {campaigns.length} ACTIVE SIGNATURES
-        </span>
-      </div>
-      <div className="tl-scroll overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-xs font-mono">
-          <thead className="bg-slate-900/70 text-[10px] uppercase tracking-wider text-slate-400">
-            <tr>
-              <th className="px-4 py-2.5 font-semibold">Signature / Pattern</th>
-              <th className="px-3 py-2.5 font-semibold">Severity</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Hits</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Targets</th>
-              <th className="px-3 py-2.5 font-semibold">First seen</th>
-              <th className="px-4 py-2.5 font-semibold">Last seen</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-sky-900/20">
-            {campaigns.map((campaign) => (
-              <tr key={campaign.id} className="transition-colors hover:bg-sky-950/30">
-                <td className="px-4 py-2.5">
-                  <span
-                    className="block max-w-[280px] truncate text-slate-200"
-                    title={campaign.sample_snippet ?? campaign.signature}
-                  >
-                    {campaign.signature}
-                  </span>
-                  {campaign.sample_snippet && (
-                    <span className="mt-0.5 block max-w-[280px] truncate text-[10px] text-slate-500">
-                      {campaign.sample_snippet}
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5">
-                  <RiskBadge level={campaign.severity} />
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-slate-200">
-                  {formatNumber(campaign.hits)}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-slate-400">
-                  {formatNumber(campaign.distinct_users)}
-                </td>
-                <td className="px-3 py-2.5 text-[10px] text-slate-400">
-                  {formatDateTime(campaign.first_seen)}
-                </td>
-                <td className="px-4 py-2.5 text-[10px] text-slate-400">
-                  {relativeTime(campaign.last_seen)}
-                </td>
+      ) : (
+        <div className="tl-scroll overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-xs">
+            <thead>
+              <tr className="bg-surface-muted text-[11px] font-medium text-muted">
+                <th className="rounded-l-xl px-4 py-2.5">Signature / Pattern</th>
+                <th className="px-3 py-2.5">Severity</th>
+                <th className="px-3 py-2.5 text-right">Hits</th>
+                <th className="px-3 py-2.5 text-right">Targets</th>
+                <th className="px-3 py-2.5">First seen</th>
+                <th className="rounded-r-xl px-4 py-2.5 text-right">Last seen</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-border-default">
+              {campaigns.map((campaign) => (
+                <tr key={campaign.id} className="transition-colors hover:bg-surface-muted/50">
+                  <td className="px-4 py-3">
+                    <span
+                      className="block max-w-[280px] truncate font-semibold text-foreground"
+                      title={campaign.sample_snippet ?? campaign.signature}
+                    >
+                      {campaign.signature}
+                    </span>
+                    {campaign.sample_snippet && (
+                      <span className="mt-0.5 block max-w-[280px] truncate text-[11px] text-muted">
+                        {campaign.sample_snippet}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
+                    <RiskBadge level={campaign.severity} />
+                  </td>
+                  <td className="px-3 py-3 text-right font-semibold tabular-nums text-foreground">
+                    {formatNumber(campaign.hits)}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums text-muted">
+                    {formatNumber(campaign.distinct_users)} users
+                  </td>
+                  <td className="px-3 py-3 text-[11px] text-muted">
+                    {formatDateTime(campaign.first_seen)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-[11px] text-muted">
+                    {relativeTime(campaign.last_seen)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
@@ -284,38 +215,43 @@ function IOCBlocklistManager({
   };
 
   return (
-    <section className="tl-hud-glass rounded-xl overflow-hidden">
-      <div className="border-b border-sky-900/40 p-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
-            THREAT INTELLIGENCE IOC BLOCKLIST CONTROLS
-          </h2>
-          <p className="mt-0.5 text-[10px] font-mono text-slate-400">
-            Live domain, scam phrase & spoofed sender indicators ({iocs.length} active · {customCount} custom)
-          </p>
+    <section id="iocs" className={`${CARD} overflow-hidden p-5 sm:p-6 scroll-mt-6`}>
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-foreground">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </span>
+          <div>
+            <h2 className="tl-serif text-xl text-foreground">Threat Intelligence IOC Blocklist</h2>
+            <p className="text-xs text-muted">
+              Live domain, scam phrase & spoofed sender rules ({iocs.length} active · {customCount} custom)
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px]">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {(['ALL', 'domain', 'keyword', 'sender'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => setFilterType(tab)}
-              className={`rounded border px-2 py-0.5 uppercase transition-colors ${
+              className={`rounded-full px-3 py-1 font-semibold capitalize transition-all ${
                 filterType === tab
-                  ? 'border-sky-400/60 bg-sky-950/70 text-sky-300 font-bold'
-                  : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-slate-200'
+                  ? 'bg-brand text-brand-foreground shadow-2xs'
+                  : 'bg-surface-muted text-muted hover:text-foreground'
               }`}
             >
-              {tab}
+              {tab === 'ALL' ? 'All' : tab}
             </button>
           ))}
           <button
             type="button"
             onClick={handleSync}
-            className="ml-1 rounded border border-emerald-700/60 bg-emerald-950/40 px-2.5 py-0.5 font-bold text-emerald-300 hover:bg-emerald-900/40"
+            className="ml-1 rounded-full bg-[#DFF4EC] border border-[#BCE6D7] px-3 py-1 font-semibold text-[#158067] hover:opacity-90"
           >
-            SYNC RUNTIME
+            Sync Runtime
           </button>
         </div>
       </div>
@@ -323,12 +259,12 @@ function IOCBlocklistManager({
       {/* Add new IOC form */}
       <form
         onSubmit={handleAdd}
-        className="border-b border-sky-950/60 bg-slate-950/50 p-3.5 grid grid-cols-1 sm:grid-cols-12 gap-2 font-mono text-xs"
+        className="mb-4 rounded-2xl bg-surface-muted/70 p-3 grid grid-cols-1 sm:grid-cols-12 gap-2.5 text-xs"
       >
         <select
           value={iocType}
           onChange={(e) => setIocType(e.target.value as 'domain' | 'keyword' | 'sender')}
-          className="sm:col-span-2 rounded border border-sky-900/50 bg-[#091124] px-2.5 py-1.5 text-xs text-slate-200 focus:border-sky-400 focus:outline-none"
+          className="sm:col-span-2 rounded-xl border border-border-default bg-surface px-3 py-2 text-xs font-medium text-foreground focus:border-[#8B3DFF] focus:outline-none"
         >
           <option value="domain">Domain</option>
           <option value="keyword">Keyword</option>
@@ -346,17 +282,17 @@ function IOCBlocklistManager({
               ? 'e.g. raast instant prize'
               : 'e.g. HBL-REWARD'
           }
-          className="sm:col-span-4 rounded border border-sky-900/50 bg-[#091124] px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+          className="sm:col-span-4 rounded-xl border border-border-default bg-surface px-3 py-2 text-xs text-foreground placeholder:text-muted focus:border-[#8B3DFF] focus:outline-none"
         />
 
         <select
           value={severity}
           onChange={(e) => setSeverity(e.target.value as 'CRITICAL' | 'HIGH' | 'MEDIUM')}
-          className="sm:col-span-2 rounded border border-sky-900/50 bg-[#091124] px-2.5 py-1.5 text-xs text-slate-200 focus:border-sky-400 focus:outline-none"
+          className="sm:col-span-2 rounded-xl border border-border-default bg-surface px-3 py-2 text-xs font-medium text-foreground focus:border-[#8B3DFF] focus:outline-none"
         >
-          <option value="CRITICAL">CRITICAL</option>
-          <option value="HIGH">HIGH</option>
-          <option value="MEDIUM">MEDIUM</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="HIGH">High</option>
+          <option value="MEDIUM">Medium</option>
         </select>
 
         <input
@@ -364,68 +300,67 @@ function IOCBlocklistManager({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Analyst rationale / ticket note..."
-          className="sm:col-span-2 rounded border border-sky-900/50 bg-[#091124] px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
+          className="sm:col-span-2 rounded-xl border border-border-default bg-surface px-3 py-2 text-xs text-foreground placeholder:text-muted focus:border-[#8B3DFF] focus:outline-none"
         />
 
         <button
           type="submit"
           disabled={submitting}
-          className="sm:col-span-2 rounded border border-sky-600/60 bg-sky-950/70 px-3 py-1.5 font-bold text-sky-300 hover:bg-sky-900/60 disabled:opacity-50"
+          className="sm:col-span-2 rounded-xl bg-brand px-3 py-2 font-semibold text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
         >
-          {submitting ? 'ADDING...' : '+ ADD IOC'}
+          {submitting ? 'Adding...' : '+ Add IOC'}
         </button>
       </form>
 
-      {/* IOC table */}
-      <div className="tl-scroll max-h-[280px] overflow-y-auto">
-        <table className="w-full min-w-[680px] text-left text-xs font-mono">
-          <thead className="sticky top-0 bg-slate-900/85 text-[10px] uppercase tracking-wider text-slate-400 z-10">
+      <div className="tl-scroll max-h-[290px] overflow-y-auto">
+        <table className="w-full min-w-[680px] text-left text-xs">
+          <thead className="sticky top-0 bg-surface-muted text-[11px] font-medium text-muted z-10">
             <tr>
-              <th className="px-4 py-2 font-semibold">Type</th>
-              <th className="px-3 py-2 font-semibold">Indicator Value</th>
-              <th className="px-3 py-2 font-semibold">Severity</th>
-              <th className="px-3 py-2 font-semibold">Source</th>
-              <th className="px-3 py-2 font-semibold">Context</th>
-              <th className="px-4 py-2 text-right font-semibold">Action</th>
+              <th className="rounded-l-xl px-4 py-2.5">Type</th>
+              <th className="px-3 py-2.5">Indicator Value</th>
+              <th className="px-3 py-2.5">Severity</th>
+              <th className="px-3 py-2.5">Source</th>
+              <th className="px-3 py-2.5">Context</th>
+              <th className="rounded-r-xl px-4 py-2.5 text-right">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-sky-900/20">
+          <tbody className="divide-y divide-border-default">
             {visibleIocs.map((ioc, idx) => (
-              <tr key={`${ioc.source}-${ioc.ioc_type}-${ioc.value}-${idx}`} className="hover:bg-sky-950/20">
-                <td className="px-4 py-2">
-                  <span className="rounded border border-sky-800/50 bg-sky-950/40 px-1.5 py-0.5 text-[10px] uppercase text-sky-300">
+              <tr key={`${ioc.source}-${ioc.ioc_type}-${ioc.value}-${idx}`} className="hover:bg-surface-muted/50">
+                <td className="px-4 py-2.5">
+                  <span className="rounded-full bg-[#E8EDFE] px-2.5 py-0.5 text-[10px] font-semibold uppercase text-[#28326B]">
                     {ioc.ioc_type}
                   </span>
                 </td>
-                <td className="px-3 py-2 font-semibold text-slate-200">{ioc.value}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2.5 font-semibold text-foreground">{ioc.value}</td>
+                <td className="px-3 py-2.5">
                   <RiskBadge level={ioc.severity} />
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2.5">
                   <span
-                    className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold capitalize ${
                       ioc.source === 'custom'
-                        ? 'border border-amber-500/40 bg-amber-950/50 text-amber-300'
-                        : 'border border-slate-700 bg-slate-900 text-slate-400'
+                        ? 'bg-[#FFF5CC] text-[#9A6B00]'
+                        : 'bg-surface-muted text-muted'
                     }`}
                   >
                     {ioc.source}
                   </span>
                 </td>
-                <td className="px-3 py-2 max-w-[220px] truncate text-[11px] text-slate-400" title={ioc.description}>
+                <td className="px-3 py-2.5 max-w-[220px] truncate text-xs text-muted" title={ioc.description}>
                   {ioc.description || '—'}
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2.5 text-right">
                   {ioc.source === 'custom' && ioc.id ? (
                     <button
                       type="button"
                       onClick={() => handleDelete(ioc)}
-                      className="rounded border border-rose-900/60 px-2 py-0.5 text-[10px] text-rose-400 hover:bg-rose-950/40"
+                      className="rounded-full bg-[#FCE4E4] px-2.5 py-0.5 text-[11px] font-semibold text-risk-critical hover:opacity-85"
                     >
                       Remove
                     </button>
                   ) : (
-                    <span className="text-[10px] text-slate-600">Core Feed</span>
+                    <span className="text-[11px] text-muted">Core feed</span>
                   )}
                 </td>
               </tr>
@@ -451,51 +386,49 @@ function AuditTrail({
   onExportCsv: () => void;
 }) {
   return (
-    <section className="tl-hud-glass rounded-xl overflow-hidden">
-      <div className="border-b border-sky-900/40 p-4 flex flex-wrap items-center justify-between gap-2">
+    <section id="audit" className={`${CARD} overflow-hidden p-5 sm:p-6 scroll-mt-6`}>
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-4">
         <div>
-          <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
-            CRYPTOGRAPHIC AUDIT TRAIL (HMAC-SHA256)
-          </h2>
-          <p className="mt-0.5 text-[10px] font-mono text-slate-400">
-            Append-only ledger chained via prev_hash + HMAC-SHA256 digest
+          <h2 className="tl-serif text-xl text-foreground">Cryptographic Audit Ledger</h2>
+          <p className="text-xs text-muted">
+            Append-only log chained via prev_hash + HMAC-SHA256
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 font-mono text-[10px]">
+        <div className="flex items-center gap-2 text-xs">
           <button
             type="button"
             onClick={onVerify}
             disabled={verifying}
-            className="rounded border border-emerald-700/60 bg-emerald-950/50 px-2.5 py-1 font-bold text-emerald-300 hover:bg-emerald-900/50 disabled:opacity-50"
+            className="rounded-full bg-[#DFF4EC] border border-[#BCE6D7] px-3.5 py-1.5 font-semibold text-[#158067] hover:opacity-90 disabled:opacity-50"
           >
-            {verifying ? 'VERIFYING...' : 'VERIFY CHAIN'}
+            {verifying ? 'Verifying...' : 'Verify Chain'}
           </button>
           <button
             type="button"
             onClick={onExportCsv}
-            className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-slate-300 hover:bg-slate-800"
+            className="rounded-full border border-border-default bg-surface-muted px-3.5 py-1.5 font-semibold text-foreground hover:bg-surface-hover"
           >
-            EXPORT CSV
+            Export CSV
           </button>
         </div>
       </div>
 
       {verification && (
         <div
-          className={`px-4 py-2 border-b font-mono text-[10px] flex flex-wrap items-center justify-between gap-2 ${
+          className={`mb-3 rounded-2xl px-4 py-2.5 text-xs font-medium flex flex-wrap items-center justify-between gap-2 ${
             verification.valid
-              ? 'border-emerald-800/40 bg-emerald-950/30 text-emerald-300'
-              : 'border-rose-800/50 bg-rose-950/40 text-rose-300'
+              ? 'bg-[#DFF4EC] text-[#158067]'
+              : 'bg-[#FCE4E4] text-risk-critical'
           }`}
         >
           <span>
             {verification.valid
-              ? `✓ HMAC CHAIN INTACT · ${verification.checked_count} / ${verification.total_records} BLOCKS VERIFIED`
-              : `✗ TAMPER DETECTED AT RECORD #${verification.broken_at_id ?? '?'} (${verification.reason ?? 'hash mismatch'})`}
+              ? `✓ HMAC chain intact · ${verification.checked_count} / ${verification.total_records} blocks verified`
+              : `✗ Tamper detected at record #${verification.broken_at_id ?? '?'} (${verification.reason ?? 'hash mismatch'})`}
           </span>
-          <span className="text-slate-400">
-            HEAD: {verification.head_signature ? `${verification.head_signature.slice(0, 16)}…` : 'GENESIS'}
+          <span className="font-mono text-[10px] opacity-80">
+            HEAD: {verification.head_signature ? `${verification.head_signature.slice(0, 14)}…` : 'GENESIS'}
           </span>
         </div>
       )}
@@ -503,25 +436,25 @@ function AuditTrail({
       {logs.length === 0 ? (
         <EmptyState title="No audit events" description="Logins, IOC updates, exports, and analyses appear here." />
       ) : (
-        <ul className="tl-scroll max-h-[340px] divide-y divide-sky-900/20 overflow-y-auto font-mono text-xs">
+        <ul className="tl-scroll max-h-[340px] divide-y divide-border-default overflow-y-auto text-xs">
           {logs.map((log) => (
-            <li key={log.id} className="flex items-center gap-3 px-4 py-2 hover:bg-sky-950/20">
-              <span className="w-28 shrink-0 truncate text-sky-300 font-semibold text-[11px]">
+            <li key={log.id} className="flex items-center gap-3 px-2 py-2.5 hover:bg-surface-muted/50 rounded-xl">
+              <span className="w-28 shrink-0 truncate font-semibold text-foreground">
                 {log.action}
               </span>
-              <span className="min-w-0 flex-1 truncate text-slate-300 text-[11px]" title={log.resource ?? ''}>
+              <span className="min-w-0 flex-1 truncate text-muted" title={log.resource ?? ''}>
                 {log.resource ?? '—'}
               </span>
               <span
-                className="hidden md:inline-block rounded border border-emerald-900/50 bg-slate-950/80 px-1.5 py-0.5 text-[9px] text-emerald-400"
+                className="hidden md:inline-block rounded-full bg-surface-muted px-2 py-0.5 font-mono text-[10px] text-[#158067]"
                 title={`HMAC: ${log.hmac_signature ?? 'none'}\nPREV: ${log.prev_hash ?? 'none'}`}
               >
                 {log.hmac_signature ? `${log.hmac_signature.slice(0, 10)}…` : 'UNSIGNED'}
               </span>
-              <span className="hidden w-24 shrink-0 truncate text-right text-[10px] text-slate-400 sm:block">
+              <span className="hidden w-24 shrink-0 truncate text-right text-[11px] text-muted sm:block">
                 {log.ip ?? '—'}
               </span>
-              <span className="w-20 shrink-0 text-right text-[10px] text-slate-500">
+              <span className="w-20 shrink-0 text-right text-[11px] text-muted">
                 {relativeTime(log.created_at)}
               </span>
             </li>
@@ -574,72 +507,71 @@ function UserRoster({
   };
 
   return (
-    <section className="tl-hud-glass rounded-xl overflow-hidden">
-      <div className="border-b border-sky-900/40 p-4 flex items-center justify-between">
+    <section id="operators" className={`${CARD} overflow-hidden p-5 sm:p-6 scroll-mt-6`}>
+      <div className="flex items-center justify-between pb-4">
         <div>
-          <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
-            RBAC ACCESS & OPERATOR ACCOUNTS
-          </h2>
-          <p className="mt-0.5 text-[10px] font-mono text-slate-400">{users.length} registered</p>
+          <h2 className="tl-serif text-xl text-foreground">Operator Accounts & RBAC</h2>
+          <p className="text-xs text-muted">{users.length} registered accounts</p>
         </div>
       </div>
+
       <div className="tl-scroll max-h-[340px] overflow-y-auto">
-        <table className="w-full text-left text-xs font-mono">
-          <thead className="sticky top-0 bg-slate-900/80 text-[10px] uppercase tracking-wider text-slate-400 z-10">
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 bg-surface-muted text-[11px] font-medium text-muted z-10">
             <tr>
-              <th className="px-4 py-2 font-semibold">Operator Email</th>
-              <th className="px-3 py-2 font-semibold">Role</th>
-              <th className="px-3 py-2 font-semibold">Status</th>
-              <th className="px-4 py-2 text-right font-semibold">Actions</th>
+              <th className="rounded-l-xl px-4 py-2.5">Account</th>
+              <th className="px-3 py-2.5">Role</th>
+              <th className="px-3 py-2.5">Status</th>
+              <th className="rounded-r-xl px-4 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-sky-900/20">
+          <tbody className="divide-y divide-border-default">
             {users.map((account) => (
-              <tr key={account.id} className="transition-colors hover:bg-sky-950/20">
-                <td className="px-4 py-2">
+              <tr key={account.id} className="transition-colors hover:bg-surface-muted/50">
+                <td className="px-4 py-2.5">
                   <div className="flex flex-col">
-                    <span className="truncate font-medium text-slate-200">{account.email}</span>
-                    <span className="text-[9px] text-slate-500">Joined {formatDateTime(account.created_at)}</span>
+                    <span className="truncate font-semibold text-foreground">{account.email}</span>
+                    <span className="text-[10px] text-muted">Joined {formatDateTime(account.created_at)}</span>
                   </div>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2.5">
                   <button
                     type="button"
                     onClick={() => handleToggleRole(account)}
                     title="Click to toggle role"
-                    className={`rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase transition-all ${
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase transition-all ${
                       account.role === 'admin'
-                        ? 'border-sky-500/40 bg-sky-950/60 text-sky-400'
-                        : 'border-slate-700 bg-slate-900 text-slate-400'
+                        ? 'bg-[#E8EDFE] text-[#28326B]'
+                        : 'bg-surface-muted text-muted'
                     }`}
                   >
                     {account.role} ⇋
                   </button>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2.5">
                   <span
-                    className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                    className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
                       account.is_active
-                        ? 'border border-emerald-500/40 bg-emerald-950/50 text-emerald-400'
-                        : 'border border-rose-500/40 bg-rose-950/50 text-rose-400'
+                        ? 'bg-[#DFF4EC] text-[#158067]'
+                        : 'bg-[#FCE4E4] text-risk-critical'
                     }`}
                   >
                     {account.is_active ? 'Active' : 'Disabled'}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-1.5">
                     <button
                       type="button"
                       onClick={() => handleToggleStatus(account)}
-                      className="rounded border border-sky-900/60 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-sky-900/30"
+                      className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-medium text-foreground hover:bg-surface-hover"
                     >
                       {account.is_active ? 'Deactivate' : 'Activate'}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDelete(account)}
-                      className="rounded border border-rose-900/60 px-2 py-0.5 text-[10px] text-rose-400 hover:bg-rose-950/40"
+                      className="rounded-full bg-[#FCE4E4] px-2.5 py-1 text-[11px] font-semibold text-risk-critical hover:opacity-85"
                     >
                       Delete
                     </button>
@@ -654,7 +586,7 @@ function UserRoster({
   );
 }
 
-/* ------------------------------------------------------------------- main command center */
+/* ----------------------------------------------------- main SOC dashboard */
 
 const NODE_POSITIONS: [number, number, number][] = [
   [0, 0.4, 0],
@@ -667,10 +599,18 @@ const NODE_POSITIONS: [number, number, number][] = [
 ];
 
 function SocDashboard() {
+  const { user, logout } = useAuth();
+  const router = useRouter();
   const queryClient = useQueryClient();
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [riskFilter, setRiskFilter] = useState<string>('ALL');
+  const [sortByScore, setSortByScore] = useState<boolean>(false);
+  const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
+  const [activeNav, setActiveNav] = useState<string>('overview');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const [selectedNode, setSelectedNode] = useState<VectorNode | null>(null);
-  const [showRadarPopup, setShowRadarPopup] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [verifyingChain, setVerifyingChain] = useState(false);
 
@@ -768,10 +708,6 @@ function SocDashboard() {
     }
   };
 
-  const handleCampaignReport = () => {
-    handleExportThreats();
-  };
-
   const handleIsolateAssets = async () => {
     try {
       const res = await api.admin.syncIocs();
@@ -795,45 +731,27 @@ function SocDashboard() {
     last_seen: new Date().toISOString(),
   };
 
-  // Dynamic technique meters derived from live backend stats
   const liveMeters = useMemo(() => {
     if (stats && stats.total_analyses > 0) {
       const denom = Math.max(1, stats.total_analyses);
       return [
+        { label: 'Phishing', pct: Math.min(100, Math.round((stats.phishing / denom) * 100)) },
+        { label: 'Financial / Raast', pct: Math.min(100, Math.round((stats.financial_fraud / denom) * 100)) },
         {
-          label: 'Phishing',
-          pct: Math.min(100, Math.round((stats.phishing / denom) * 100)),
-          color: 'ruby' as const,
+          label: 'Job & Investment',
+          pct: Math.min(100, Math.round(((stats.job_scams + stats.investment_scams) / denom) * 100)),
         },
-        {
-          label: 'Financial / Raast',
-          pct: Math.min(100, Math.round((stats.financial_fraud / denom) * 100)),
-          color: 'ruby' as const,
-        },
-        {
-          label: 'Job / Invest',
-          pct: Math.min(
-            100,
-            Math.round(((stats.job_scams + stats.investment_scams) / denom) * 100),
-          ),
-          color: 'amber' as const,
-        },
-        {
-          label: 'Prize / Lure',
-          pct: Math.min(100, Math.round((stats.prize_scams / denom) * 100)),
-          color: 'cyan' as const,
-        },
+        { label: 'Prize / Lure', pct: Math.min(100, Math.round((stats.prize_scams / denom) * 100)) },
       ];
     }
     return [
-      { label: 'Phishing', pct: 0, color: 'ruby' as const },
-      { label: 'Financial / Raast', pct: 0, color: 'ruby' as const },
-      { label: 'Job / Invest', pct: 0, color: 'amber' as const },
-      { label: 'Prize / Lure', pct: 0, color: 'cyan' as const },
+      { label: 'Phishing', pct: 0 },
+      { label: 'Financial / Raast', pct: 0 },
+      { label: 'Job & Investment', pct: 0 },
+      { label: 'Prize / Lure', pct: 0 },
     ];
   }, [stats]);
 
-  // Dynamic 3D VectorNodes derived from live campaigns & high-risk analyses when present
   const liveVectorNodes = useMemo<VectorNode[] | undefined>(() => {
     const built: VectorNode[] = [];
     for (const c of (campaigns ?? []).slice(0, 4)) {
@@ -866,11 +784,9 @@ function SocDashboard() {
     return built.length >= 2 ? built : undefined;
   }, [campaigns, analyses]);
 
-  // Live cockpit risk score & Khatra banner
   const cockpitRiskScore = useMemo(() => {
     if (analyses.length > 0) {
-      const topRecent = Math.max(...analyses.slice(0, 10).map((a) => a.risk_score));
-      return topRecent;
+      return Math.max(...analyses.slice(0, 10).map((a) => a.risk_score));
     }
     if (metrics?.performance?.threat_ratio_pct !== undefined) {
       return Math.round(metrics.performance.threat_ratio_pct);
@@ -881,520 +797,775 @@ function SocDashboard() {
   const khatraLevel =
     cockpitRiskScore >= 70 ? 'BULAND' : cockpitRiskScore >= 40 ? 'DARMIYANA' : 'MEHFOOZ';
 
-  // Filter analyses based on search query
-  const filteredAnalyses = useMemo(() => {
-    if (!searchQuery) return analyses.slice(0, 4);
-    const q = searchQuery.toLowerCase();
-    return analyses
-      .filter(
+  const threatRatioPct = useMemo(() => {
+    if (metrics?.performance?.threat_ratio_pct !== undefined) {
+      return Math.round(metrics.performance.threat_ratio_pct);
+    }
+    if (stats && stats.total_analyses > 0) {
+      return Math.round((stats.high_risk / stats.total_analyses) * 100);
+    }
+    return cockpitRiskScore;
+  }, [metrics, stats, cockpitRiskScore]);
+
+  const tableRows = useMemo(() => {
+    let list = [...analyses];
+    if (riskFilter !== 'ALL') {
+      list = list.filter((a) => (a.risk_level || '').toUpperCase() === riskFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
         (a) =>
           (a.content_snippet && a.content_snippet.toLowerCase().includes(q)) ||
           (a.threat_type && a.threat_type.toLowerCase().includes(q)) ||
           (a.risk_level && a.risk_level.toLowerCase().includes(q)) ||
-          (a.input_type && a.input_type.toLowerCase().includes(q)),
-      )
-      .slice(0, 4);
-  }, [analyses, searchQuery]);
+          (a.input_type && a.input_type.toLowerCase().includes(q)) ||
+          (a.user_email && a.user_email.toLowerCase().includes(q)),
+      );
+    }
+    if (sortByScore) {
+      list.sort((a, b) => b.risk_score - a.risk_score);
+    }
+    return list.slice(0, 8);
+  }, [analyses, riskFilter, searchQuery, sortByScore]);
 
   const customIocCount = useMemo(
     () => (iocs ?? []).filter((item) => item.source === 'custom').length,
     [iocs],
   );
 
-  return (
-    <div className="min-h-screen bg-[#040711] text-slate-100 tl-circuit-pattern">
-      {/* 1. TOP COCKPIT HEADER BAR */}
-      <header className="border-b border-sky-950/70 bg-[#060b18]/90 backdrop-blur-xl px-5 py-3 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-400">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
-            </span>
-            <span className="font-mono text-base font-extrabold tracking-tight text-white">TrustLayer</span>
-          </div>
-          <span className="text-slate-600 font-mono">|</span>
-          <h1 className="font-mono text-sm font-semibold tracking-wider text-slate-300">
-            Campaign Correlation Engine
-          </h1>
-          <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-950/50 px-2 py-0.5 font-mono text-[9px] text-sky-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
-            ZERO-STORAGE · 4-CHANNEL FUSION ACTIVE
-          </span>
+  const jumpTo = (id: string, navKey: string) => {
+    setActiveNav(navKey);
+    setMobileMenuOpen(false);
+    if (id === 'top') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const sidebarContent = (
+    <div className="flex h-full flex-col justify-between p-4">
+      <div className="space-y-6">
+        <div className="px-2 pt-1 flex items-center justify-between">
+          <Link href="/" aria-label="TrustLayer Home">
+            <Logo size={30} />
+          </Link>
         </div>
 
-        <div className="flex items-center gap-2 font-mono text-xs">
-          <button
-            onClick={handleRefresh}
-            className="rounded border border-sky-800/60 bg-sky-950/40 px-2.5 py-1 text-[11px] text-sky-300 hover:bg-sky-900/50"
-          >
-            SYNC TELEMETRY
-          </button>
-          <button
-            onClick={handleExportThreats}
-            className="rounded border border-slate-800 bg-slate-900 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
-          >
-            CSV EXPORT
-          </button>
-        </div>
-      </header>
-
-      {/* 2. THREE-COLUMN COCKPIT */}
-      <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* ---------------- LEFT PANEL (Col 1-3) ---------------- */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search zero-storage incidents..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-sky-900/50 bg-[#091124]/90 px-3 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
-            />
-            <span className="absolute right-3 top-2.5 text-xs text-slate-500">⌘K</span>
-          </div>
-
-          {/* Live Threat Feed */}
-          <div className="tl-hud-glass rounded-xl p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between border-b border-sky-950 pb-2">
-              <span className="font-mono text-xs font-bold text-sky-300">Threat Feed</span>
-              <span className="font-mono text-[9px] text-slate-500">
-                {analyses.length} LIVE RECORDS
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              {filteredAnalyses.length === 0 ? (
-                <div className="rounded border border-sky-950/40 bg-slate-950/50 p-3 font-mono text-[11px] text-slate-400">
-                  No matching telemetry records yet. Submit a scan to populate live SOC feed.
-                </div>
-              ) : (
-                filteredAnalyses.slice(0, 3).map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded border border-sky-950/40 bg-slate-950/50 p-2 font-mono text-[11px]"
-                  >
-                    <div className="flex justify-between items-center text-slate-400">
-                      <span className="truncate max-w-[150px]">
-                        Vector: <strong className="text-sky-300">{item.threat_type || item.input_type}</strong>
-                      </span>
-                      <span
-                        className={`rounded px-1 text-[9px] border ${
-                          item.risk_level === 'CRITICAL'
-                            ? 'bg-rose-950/60 text-rose-300 border-rose-800/40'
-                            : item.risk_level === 'HIGH'
-                            ? 'bg-amber-950/60 text-amber-300 border-amber-800/40'
-                            : 'bg-sky-950/60 text-sky-300 border-sky-800/40'
-                        }`}
-                      >
-                        {item.risk_level} · {item.risk_score}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 truncate text-[10px] text-slate-500" title={item.content_snippet}>
-                      {item.content_snippet || 'Zero-storage hash reference'}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Live Technique Meters */}
-          <div className="tl-hud-glass rounded-xl p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between border-b border-sky-950 pb-2">
-              <span className="font-mono text-xs font-bold text-sky-300">Technique Meters</span>
-              <span className="font-mono text-[9px] text-slate-500">LIVE TAXONOMY</span>
-            </div>
-
-            <div className="space-y-2 pt-1">
-              {liveMeters.map((m) => (
-                <SegmentedMeter key={m.label} label={m.label} pct={m.pct} color={m.color} />
-              ))}
-            </div>
-
-            <div className="mt-2 rounded border border-sky-900/30 bg-sky-950/30 px-2 py-1 font-mono text-[9px] text-sky-400 flex items-center justify-between">
-              <span>ZERO-STORAGE MODE:</span>
-              <span className="font-bold text-emerald-400">[SHA-256 REDACTED]</span>
-            </div>
-          </div>
-
-          {/* Campaign Metadata & Sparklines */}
-          <div className="tl-hud-glass rounded-xl p-3.5 space-y-2 font-mono text-[11px]">
-            <div className="flex items-center justify-between border-b border-sky-950 pb-2">
-              <span className="text-xs font-bold text-sky-300">Engine Telemetry</span>
-              <span className="text-[9px] text-slate-500">4-CHANNEL</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-[10px] pt-1">
-              <div>
-                <span className="text-slate-500 block">Avg Latency:</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-300">
-                    {metrics?.performance?.avg_latency_ms ?? 0} ms
-                  </span>
-                  <WaveformPulse />
-                </div>
-              </div>
-              <div>
-                <span className="text-slate-500 block">ML Engine:</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-300">
-                    {metrics?.ml_engine?.model_loaded ? '15k TF-IDF' : 'Standby'}
-                  </span>
-                  <WaveformSine />
-                </div>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Campaigns:</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-rose-400 font-bold">
-                    {campaigns?.length ?? 0} Active
-                  </span>
-                  <WaveformBars />
-                </div>
-              </div>
-              <div>
-                <span className="text-slate-500 block">HMAC Ledger:</span>
-                <span
-                  className={`font-bold ${
-                    chainVerification?.valid === false ? 'text-rose-400' : 'text-emerald-400'
+        {/* Main section matching RevenueX */}
+        <div>
+          <p className="px-3 text-[11px] font-medium text-muted mb-1.5">Main</p>
+          <div className="space-y-1">
+            {[
+              {
+                key: 'overview',
+                target: 'top',
+                label: 'Dashboard',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                  </svg>
+                ),
+              },
+              {
+                key: 'campaigns',
+                target: 'campaigns',
+                label: 'Campaigns',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                ),
+              },
+              {
+                key: 'topology',
+                target: 'topology',
+                label: 'Analytics & Topology',
+                icon: (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                    <path d="M18 20V10M12 20V4M6 20v-6" />
+                  </svg>
+                ),
+              },
+            ].map((item) => {
+              const active = activeNav === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => jumpTo(item.target, item.key)}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all ${
+                    active
+                      ? 'bg-surface text-foreground font-semibold shadow-sm'
+                      : 'text-foreground/80 hover:bg-black/[0.04]'
                   }`}
                 >
-                  {chainVerification?.valid === false ? 'Tampered' : 'Verified'}
-                </span>
-              </div>
-            </div>
-
-            <div className="pt-1">
-              <span className="text-[9px] text-slate-500 block mb-1">
-                Parallel Scoring Pipeline // ML + Rules + SE + URL Intel
-              </span>
-              <WaveformCanvas />
-            </div>
+                  <span className="text-foreground/80">{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* ---------------- CENTER PANEL (Col 4-9) ---------------- */}
-        <div className="lg:col-span-6 space-y-4 flex flex-col">
-          {/* Top Status Bar */}
-          <div className="tl-hud-glass rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2">
-                <span className="text-sky-400 font-bold">Live Threat Summary</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-slate-300 font-semibold">
-                  {stats?.total_analyses ?? 0} Total Scans · {stats?.high_risk ?? 0} High/Critical
+        {/* Monitors section matching RevenueX "Inboxes" */}
+        <div>
+          <p className="px-3 text-[11px] font-medium text-muted mb-1.5">Detection Channels</p>
+          <div className="space-y-2 px-1">
+            {[
+              { name: 'SMS & Raast Stream', sub: 'EN + Roman Urdu' },
+              { name: 'URL & Domain Sentry', sub: 'Static Heuristics' },
+              { name: 'Optical OCR Guard', sub: 'In-Memory RAM' },
+            ].map((ch) => (
+              <div key={ch.name} className="flex items-center gap-2.5 rounded-xl px-2 py-1.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-foreground/80 text-[11px] font-bold">
+                  {ch.name.charAt(0)}
                 </span>
+                <div className="min-w-0 leading-tight">
+                  <p className="truncate text-xs font-semibold text-foreground">{ch.name}</p>
+                  <p className="truncate text-[10px] text-muted">{ch.sub}</p>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-[11px]">
-                <span>
-                  Lead Signature:{' '}
-                  <strong className="text-rose-400">
-                    {activeCampaign.signature.slice(0, 28)}
-                  </strong>
-                </span>
-                <span className="text-slate-600">/</span>
-                <span>
-                  Custom IOCs: <strong className="text-sky-300">{customIocCount}</strong>
-                </span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4">
-              {liveMeters.slice(0, 3).map((m) => (
-                <SegmentedMeter key={m.label} label={m.label} pct={m.pct} color={m.color} />
-              ))}
-            </div>
+            ))}
           </div>
+        </div>
 
-          {/* MAIN 3D VECTOR NODES MAP */}
-          <div
-            className={`relative flex-1 min-h-[460px] rounded-xl overflow-hidden border border-sky-900/50 bg-[#02050f] shadow-2xl transition-all ${
-              isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''
-            }`}
-          >
-            <VectorNodesMap3D
-              nodes={liveVectorNodes}
-              selectedNode={selectedNode}
-              onSelectNode={(node) => setSelectedNode(node)}
-            />
-
+        {/* Operations section matching RevenueX "Other" */}
+        <div>
+          <p className="px-3 text-[11px] font-medium text-muted mb-1.5">Operations</p>
+          <div className="space-y-1">
             <button
-              onClick={() => setIsFullscreen(!isFullscreen)}
-              className="absolute top-4 right-4 p-1.5 rounded bg-sky-950/60 border border-sky-500/30 text-sky-400 hover:bg-sky-900/80 z-10 transition-colors"
-              title="Toggle Fullscreen"
+              type="button"
+              onClick={() => jumpTo('iocs', 'iocs')}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-all ${
+                activeNav === 'iocs'
+                  ? 'bg-surface text-foreground font-semibold shadow-sm'
+                  : 'text-foreground/80 hover:bg-black/[0.04]'
+              }`}
             >
-              {isFullscreen ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+              <span className="flex items-center gap-2.5">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-                </svg>
-              )}
+                IOC Blocklist
+              </span>
+              <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-brand-foreground">
+                {iocs?.length ?? 0}
+              </span>
             </button>
 
-            {/* Bottom Campaign Metadata Console */}
-            <div className="absolute bottom-4 left-4 z-10 tl-hud-glass rounded-xl p-4 font-mono w-[calc(100%-2rem)] md:w-[600px] backdrop-blur-md bg-[#060b18]/80 border-sky-500/30">
-              <div className="flex items-center justify-between border-b border-sky-900/40 pb-2 mb-3">
-                <span className="text-xs font-bold text-sky-400">Campaign Metadata</span>
-                <span className="text-[10px] text-slate-500">
-                  CORRELATION ENGINE · {campaigns?.length ?? 0} CLUSTERS
-                </span>
-              </div>
+            <button
+              type="button"
+              onClick={() => jumpTo('audit', 'audit')}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-all ${
+                activeNav === 'audit'
+                  ? 'bg-surface text-foreground font-semibold shadow-sm'
+                  : 'text-foreground/80 hover:bg-black/[0.04]'
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </svg>
+                HMAC Audit Trail
+              </span>
+            </button>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-4">
-                <div>
-                  <span className="text-[10px] text-slate-500 block">Campaign:</span>
-                  <span className="text-rose-400 font-bold truncate block" title={activeCampaign.signature}>
-                    {activeCampaign.signature.slice(0, 20)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 block">Severity:</span>
-                  <span className="text-slate-300">{activeCampaign.severity}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 block">Coverage:</span>
-                  <span className="text-sky-300">EN + Roman Urdu + Raast</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 block">Correlated Hits:</span>
-                  <span className="text-slate-300">
-                    {activeCampaign.hits} ({activeCampaign.distinct_users} users)
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-sky-950 pt-3">
-                <span className="text-[10px] text-slate-500">SOC RESPONSE ACTIONS</span>
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={handleCampaignReport}
-                    className="rounded border border-sky-700/60 bg-sky-950/60 px-3 py-1.5 font-bold text-sky-300 hover:bg-sky-900/60 transition-all active:scale-95"
-                  >
-                    EXPORT DOSSIER
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleIsolateAssets}
-                    className="rounded border border-rose-800/70 bg-rose-950/60 px-3 py-1.5 font-bold text-rose-400 hover:bg-rose-900/60 transition-all active:scale-95"
-                  >
-                    SYNC IOC QUARANTINE
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAlertManagers}
-                    className="rounded border border-amber-700/60 bg-amber-950/60 px-3 py-1.5 font-bold text-amber-300 hover:bg-amber-900/60 transition-all active:scale-95"
-                  >
-                    ALERT OPERATORS
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {showRadarPopup && (
-              <div className="absolute bottom-4 right-4 z-10 tl-hud-glass rounded-xl p-3 font-mono backdrop-blur-md bg-[#060b18]/80 border-sky-500/30 w-52">
-                <div className="flex items-center justify-between border-b border-sky-950 pb-1.5 mb-2">
-                  <span className="text-[10px] font-bold text-sky-300">Vector Nodes Map</span>
-                  <button onClick={() => setShowRadarPopup(false)} className="text-slate-500 hover:text-sky-400">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="relative h-24 w-full flex items-center justify-center rounded border border-sky-950/60 bg-slate-950/70">
-                  <svg className="h-full w-full" viewBox="0 0 160 100">
-                    <line x1="80" y1="50" x2="30" y2="30" stroke="#ef4444" strokeWidth="1" strokeDasharray="2 2" />
-                    <line x1="80" y1="50" x2="130" y2="25" stroke="#f59e0b" strokeWidth="1" strokeDasharray="2 2" />
-                    <line x1="80" y1="50" x2="135" y2="75" stroke="#38bdf8" strokeWidth="1" />
-                    <line x1="80" y1="50" x2="35" y2="75" stroke="#38bdf8" strokeWidth="1" />
-
-                    <circle cx="80" cy="50" r="12" fill="#082f49" stroke="#38bdf8" strokeWidth="1.5" />
-                    <circle cx="80" cy="50" r="3" fill="#38bdf8" />
-
-                    <circle cx="30" cy="30" r="4" fill="#ef4444" />
-                    <circle cx="130" cy="25" r="4" fill="#f59e0b" />
-                    <circle cx="135" cy="75" r="4" fill="#38bdf8" />
-                    <circle cx="35" cy="75" r="4" fill="#38bdf8" />
-                  </svg>
-                </div>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => jumpTo('operators', 'operators')}
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-all ${
+                activeNav === 'operators'
+                  ? 'bg-surface text-foreground font-semibold shadow-sm'
+                  : 'text-foreground/80 hover:bg-black/[0.04]'
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                </svg>
+                Operator Roster
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* ---------------- RIGHT PANEL (Col 10-12) ---------------- */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="tl-hud-glass rounded-xl p-3.5 space-y-2">
-            <div className="flex items-center justify-between border-b border-sky-950 pb-2">
-              <span className="font-mono text-xs font-bold text-sky-300">Vector Nodes Map</span>
-              <span className="font-mono text-[9px] text-slate-500">TOPOLOGY</span>
-            </div>
-
-            <div className="relative h-28 w-full flex items-center justify-center rounded border border-sky-950/60 bg-slate-950/70">
-              <svg className="h-full w-full" viewBox="0 0 160 100">
-                <line x1="80" y1="50" x2="30" y2="30" stroke="#ef4444" strokeWidth="1" strokeDasharray="2 2" />
-                <line x1="80" y1="50" x2="130" y2="25" stroke="#f59e0b" strokeWidth="1" strokeDasharray="2 2" />
-                <line x1="80" y1="50" x2="135" y2="75" stroke="#38bdf8" strokeWidth="1" />
-                <line x1="80" y1="50" x2="35" y2="75" stroke="#38bdf8" strokeWidth="1" />
-
-                <circle cx="80" cy="50" r="14" fill="#082f49" stroke="#38bdf8" strokeWidth="1.5" />
-                <circle cx="80" cy="50" r="4" fill="#38bdf8" />
-                <text x="80" y="32" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">
-                  SOC Hub
-                </text>
-
-                <circle cx="30" cy="30" r="5" fill="#ef4444" />
-                <text x="30" y="20" fill="#ef4444" fontSize="5" fontFamily="monospace" textAnchor="middle">
-                  ML Classifier
-                </text>
-
-                <circle cx="130" cy="25" r="5" fill="#f59e0b" />
-                <text x="130" y="15" fill="#f59e0b" fontSize="5" fontFamily="monospace" textAnchor="middle">
-                  Rule + IOC
-                </text>
-
-                <circle cx="135" cy="75" r="5" fill="#38bdf8" />
-                <text x="135" y="87" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">
-                  SE Taxonomy
-                </text>
-
-                <circle cx="35" cy="75" r="5" fill="#38bdf8" />
-                <text x="35" y="87" fill="#38bdf8" fontSize="5" fontFamily="monospace" textAnchor="middle">
-                  URL Heuristic
-                </text>
+        {/* Account section */}
+        <div>
+          <p className="px-3 text-[11px] font-medium text-muted mb-1.5">Account</p>
+          <div className="space-y-1">
+            <Link
+              href="/analyze"
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-foreground/80 hover:bg-black/[0.04]"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
               </svg>
-              <span className="absolute bottom-1 right-2 font-mono text-[8px] text-slate-500">STAR-CORRELATION</span>
-            </div>
-          </div>
-
-          {/* Risk Visualization & 3D Mechanical Cyber Shield */}
-          <div className="tl-hud-glass-ruby rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-rose-950 pb-2">
-              <span className="font-mono text-xs font-bold text-rose-300">Risk Visualization</span>
-              <span className="font-mono text-[9px] text-slate-500">LIVE PEAK</span>
-            </div>
-
-            <div className="rounded border border-rose-600/50 bg-rose-950/80 py-1.5 px-3 text-center shadow-[0_0_15px_rgba(244,63,94,0.3)]">
-              <span className="font-mono text-xs font-extrabold tracking-widest text-rose-300">
-                KHATRA LEVEL: {khatraLevel}
-              </span>
-            </div>
-
-            <div className="relative">
-              <RiskShield3D score={cockpitRiskScore} level={khatraLevel} />
-
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[9px] text-slate-400 pt-1">
-                <div className="flex justify-between">
-                  <span>SCANS:</span>
-                  <span className="text-slate-200">{stats?.total_analyses ?? 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>HIGH/CRIT:</span>
-                  <span className="text-rose-400 font-bold">{stats?.high_risk ?? 0}</span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span>LATENCY:</span>
-                  <span className="text-slate-200">{metrics?.performance?.avg_latency_ms ?? 0}ms</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>CAMPAIGNS:</span>
-                  <span className="text-slate-200">{campaigns?.length ?? 0}</span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span>IOC FEED:</span>
-                  <span className="text-sky-300">{iocs?.length ?? 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>AUDIT HMAC:</span>
-                  <span className="text-emerald-400">
-                    {chainVerification?.valid === false ? 'BROKEN' : 'OK'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Connection Types and Indicators Legend */}
-          <div className="tl-hud-glass rounded-xl p-3.5 space-y-2 font-mono text-xs">
-            <div className="flex items-center justify-between border-b border-sky-950 pb-2">
-              <span className="text-xs font-bold text-sky-300">Connection Types & Indicators</span>
-              <span className="text-[9px] text-slate-500">LEGEND</span>
-            </div>
-
-            <div className="space-y-2 pt-1 text-[11px]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_#f43f5e]" />
-                  <span className="text-rose-400 font-semibold">High / Critical Scam</span>
-                </div>
-                <span className="text-slate-500">→ Octahedron</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-sky-400 shadow-[0_0_6px_#38bdf8]" />
-                  <span className="text-sky-300 font-semibold">Low / Benign Telemetry</span>
-                </div>
-                <span className="text-slate-500">→ Tetrahedron</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]" />
-                  <span className="text-amber-400 font-semibold">Correlated Campaign</span>
-                </div>
-                <span className="text-slate-500">→ Cube Node</span>
-              </div>
-            </div>
+              Shield AI Scanner
+            </Link>
+            <Link
+              href="/"
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-foreground/80 hover:bg-black/[0.04]"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              </svg>
+              Home Overview
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* 3. LOWER OPERATIONS DECK: TREND, CAMPAIGNS, IOC BLOCKLIST, HMAC AUDIT, & RBAC */}
-      <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto border-t border-sky-950/60 mt-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 font-mono text-xs text-slate-400">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            ORGANIZATION COMPLIANCE, IOC CONTROLS & CRYPTOGRAPHIC INCIDENT ARCHIVES
+      {/* Bottom Profile Card matching Evan Parker card in RevenueX */}
+      <div className="mt-6 rounded-2xl bg-black/[0.05] dark:bg-white/[0.05] p-3 flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-foreground text-xs font-bold">
+            {(user?.email || 'SA').slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-foreground">SOC Administrator</p>
+            <p className="truncate text-[11px] text-muted">{user?.email || 'admin@trustlayer.app'}</p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            logout();
+            router.push('/');
+          }}
+          title="Sign out"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-black/[0.06] hover:text-foreground"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
 
-        {/* 14-day Risk Trend & Threat Taxonomy */}
-        {stats && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section className="tl-hud-glass rounded-xl p-4">
-              <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400 mb-3">
-                14-DAY INCIDENT RISK TREND
-              </h2>
-              <TrendChart data={stats.threat_trend} />
-            </section>
-            <TechniqueBars stats={stats} />
+  const operatorInitials = (users ?? []).slice(0, 3);
+  const extraOperators = Math.max(0, (users?.length ?? 0) - 3);
+
+  return (
+    <div className="min-h-screen flex bg-background text-foreground">
+      {/* Left Stone Sidebar (Desktop) */}
+      <aside className="hidden lg:block w-64 shrink-0 border-r border-border-default tl-sidebar-stone sticky top-0 h-screen overflow-y-auto tl-scroll">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Sidebar Drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-xs" onClick={() => setMobileMenuOpen(false)} />
+          <div className="relative z-10 w-72 max-w-[82vw] h-full tl-sidebar-stone border-r border-border-default overflow-y-auto">
+            {sidebarContent}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Active Campaigns Table */}
-        <CampaignTable campaigns={campaigns ?? []} />
+      {/* Main Content Shell */}
+      <div className="flex-1 min-w-0">
+        {/* Top Search & Actions Header matching RevenueX */}
+        <header className="sticky top-0 z-30 border-b border-border-default/70 bg-background/90 backdrop-blur-xl px-5 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3 flex-1 max-w-md">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border-default bg-surface text-foreground"
+              aria-label="Open SOC menu"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 6h18M3 12h18M3 18h18" />
+              </svg>
+            </button>
 
-        {/* Dynamic IOC Blocklist Controls (FR-12 / DFD Level 0) */}
-        <IOCBlocklistManager iocs={iocs ?? []} onChanged={handleRefresh} />
+            <div className="relative flex-1">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search threats, campaigns, or IOCs..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-full border border-border-default bg-surface pl-9 pr-20 py-2 text-xs text-foreground placeholder:text-muted shadow-2xs focus:border-[#8B3DFF] focus:outline-none"
+              />
+              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-muted">
+                ⌘ + Space
+              </span>
+            </div>
+          </div>
 
-        {/* Cryptographic Audit Trail (FR-10) & RBAC */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <AuditTrail
-            logs={logs ?? []}
-            verification={chainVerification}
-            onVerify={handleVerifyChain}
-            verifying={verifyingChain}
-            onExportCsv={handleExportAudit}
-          />
-          <UserRoster users={users ?? []} onActionSuccess={handleRefresh} />
+          <div className="flex items-center gap-2.5">
+            {/* Overlapping Operator Avatar Stack matching RevenueX */}
+            {operatorInitials.length > 0 && (
+              <div className="hidden sm:flex items-center mr-1">
+                <div className="flex -space-x-2">
+                  {operatorInitials.map((op, i) => {
+                    const bgColors = ['bg-[#CBD4FA] text-[#1E2756]', 'bg-[#CBE3DF] text-[#134E44]', 'bg-[#EFE2D8] text-[#5C3D28]'];
+                    return (
+                      <span
+                        key={op.id}
+                        title={op.email}
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface text-[11px] font-bold ${bgColors[i % bgColors.length]}`}
+                      >
+                        {op.email.slice(0, 2).toUpperCase()}
+                      </span>
+                    );
+                  })}
+                </div>
+                {extraOperators > 0 && (
+                  <span className="ml-2 text-xs font-semibold text-muted">+{extraOperators}</span>
+                )}
+              </div>
+            )}
+
+            <ThemeToggle />
+            <NotificationTray />
+
+            <button
+              type="button"
+              onClick={handleExportThreats}
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground shadow-[var(--shadow-cyber)] transition-all hover:bg-brand-hover"
+            >
+              <span>Export Data</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        {/* Main Bento Canvas */}
+        <div className="p-5 sm:p-8 space-y-6 max-w-[1400px] mx-auto">
+          {/* Page Title Row matching "Performance Overview" in RevenueX */}
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="tl-serif text-3xl sm:text-4xl text-foreground">
+                Security Overview
+              </h1>
+              <p className="mt-1 text-sm text-muted">
+                Your detections, campaigns, and forensic insights — all in one place
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleRefresh}
+                className={BTN.secondary}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                  <path d="M16 16h5v5" />
+                </svg>
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={handleIsolateAssets}
+                className={BTN.secondary}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="4" y1="21" x2="4" y2="14" />
+                  <line x1="4" y1="10" x2="4" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12" y2="3" />
+                  <line x1="20" y1="21" x2="20" y2="16" />
+                  <line x1="20" y1="12" x2="20" y2="3" />
+                </svg>
+                Sync IOC Quarantine
+              </button>
+            </div>
+          </div>
+
+          {/* BENTO ROW 1: Golden-Amber Hero Card (5 cols) + Violet Detection Trends Card (7 cols) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Left Golden-Amber Mesh Card matching "Explore your performance" */}
+            <div className="lg:col-span-5 rounded-[24px] border border-[#EFE3BA] dark:border-border-default tl-amber-mesh p-6 sm:p-7 flex flex-col justify-between min-h-[320px] shadow-[var(--shadow-card)]">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex -space-x-1.5">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#141416] text-white text-[10px] font-bold">
+                      TL
+                    </span>
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#141416] text-white text-[9px] font-bold border border-white/30">
+                      4x
+                    </span>
+                  </div>
+                  <span className="text-xs font-medium text-[#141416] dark:text-foreground">
+                    Telemetry · Live data
+                  </span>
+                </div>
+
+                <span className="rounded-full bg-white/80 dark:bg-black/30 px-3 py-1 text-[11px] font-bold text-[#141416] dark:text-foreground backdrop-blur-sm">
+                  Khatra: {khatraLevel}
+                </span>
+              </div>
+
+              <div className="my-6">
+                <h2 className="tl-serif text-4xl sm:text-[44px] leading-[1.03] text-[#141416] dark:text-foreground">
+                  Explore your
+                  <br />
+                  <span className="italic">threat posture</span>
+                </h2>
+                <p className="mt-3 text-xs sm:text-sm text-[#3F3A2C] dark:text-muted max-w-xs">
+                  Dive into 4-channel consensus, zero-storage incidents, and correlated scam campaigns.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleExportThreats}
+                  className="rounded-full bg-[#141416] px-3.5 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  Export Dossier
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAlertManagers}
+                  className="rounded-full bg-white/85 px-3.5 py-1.5 text-xs font-semibold text-[#141416] transition-colors hover:bg-white"
+                >
+                  Alert Operators
+                </button>
+                <span className="ml-auto text-[11px] font-semibold text-[#3F3A2C] dark:text-muted">
+                  {customIocCount} custom IOCs
+                </span>
+              </div>
+            </div>
+
+            {/* Right Detection Trends Card matching "Revenue Trends" */}
+            <div className={`lg:col-span-7 ${CARD} p-6 flex flex-col justify-between`}>
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-foreground">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                      </svg>
+                    </span>
+                    <h2 className="tl-serif text-xl text-foreground">Detection Trends</h2>
+                  </div>
+
+                  <span className="rounded-full bg-surface-muted px-3 py-1 text-xs font-medium text-muted">
+                    14-Day Window ▾
+                  </span>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <span className="text-3xl font-bold tracking-tight tabular-nums text-foreground">
+                    {formatNumber(stats?.total_analyses ?? analyses.length)}
+                  </span>
+                  <span className="rounded-full bg-[#A3F750] px-2.5 py-0.5 text-xs font-bold text-[#143300]">
+                    + {formatNumber(stats?.high_risk ?? 0)} high/crit
+                  </span>
+                  <span className="text-xs text-muted">
+                    {metrics?.performance?.avg_latency_ms ?? 0}ms avg latency · {campaigns?.length ?? 0} active campaigns
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <TrendChart data={stats?.threat_trend ?? []} />
+              </div>
+            </div>
+          </div>
+
+          {/* BENTO ROW 2: Live Threat Performance Table (7 cols) + Goal/Taxonomy & AI Co-Pilot (5 cols) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Left 7-col Table Card matching "Product Performance" */}
+            <div className={`lg:col-span-7 ${CARD} p-5 sm:p-6`}>
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-foreground">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="14" width="7" height="7" rx="1" />
+                      <rect x="3" y="14" width="7" height="7" rx="1" />
+                    </svg>
+                  </span>
+                  <h2 className="tl-serif text-xl text-foreground">Threat Performance</h2>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSortByScore((v) => !v)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      sortByScore
+                        ? 'bg-brand text-brand-foreground'
+                        : 'bg-surface-muted text-foreground hover:bg-surface-hover'
+                    }`}
+                  >
+                    Sort ↑↓
+                  </button>
+                  <select
+                    value={riskFilter}
+                    onChange={(e) => setRiskFilter(e.target.value)}
+                    className="rounded-full bg-surface-muted px-3 py-1 text-xs font-medium text-foreground focus:outline-none"
+                  >
+                    <option value="ALL">Filter: All</option>
+                    <option value="CRITICAL">Critical</option>
+                    <option value="HIGH">High</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="LOW">Low / Safe</option>
+                  </select>
+                </div>
+              </div>
+
+              {tableRows.length === 0 ? (
+                <EmptyState
+                  title="No matching telemetry"
+                  description="Submit a scan or adjust your search/filter criteria."
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-left text-xs">
+                    <thead>
+                      <tr className="bg-surface-muted text-[11px] font-medium text-muted">
+                        <th className="rounded-l-xl px-4 py-2.5">Threat Vector</th>
+                        <th className="px-3 py-2.5">Channel</th>
+                        <th className="px-3 py-2.5">Status</th>
+                        <th className="rounded-r-xl px-4 py-2.5 text-right">Risk Score</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-default">
+                      {tableRows.map((item) => {
+                        const isExpanded = expandedRowId === item.id;
+                        return (
+                          <tr
+                            key={item.id}
+                            onClick={() => setExpandedRowId(isExpanded ? null : item.id)}
+                            className="cursor-pointer transition-colors hover:bg-surface-muted/45"
+                          >
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <span
+                                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                                    item.campaign_flagged || isExpanded
+                                      ? 'bg-[#A3F750] text-[#143300]'
+                                      : 'border border-border-strong text-transparent'
+                                  }`}
+                                >
+                                  ✓
+                                </span>
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background text-[11px] font-bold uppercase">
+                                  {(item.input_type || 'TX').slice(0, 2)}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-foreground">
+                                    {item.threat_type || 'Telemetry Scan'}
+                                  </p>
+                                  <p className="truncate text-[11px] text-muted">
+                                    #IR-{item.id} · {relativeTime(item.created_at)}
+                                  </p>
+                                  {isExpanded && (
+                                    <p className="mt-1.5 max-w-xs font-mono text-[11px] text-muted whitespace-normal">
+                                      {item.content_snippet || 'Zero-storage hash reference'}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3.5 font-medium text-foreground">
+                              {item.input_type.toUpperCase()}
+                              <span className="block text-[10px] text-muted">
+                                {item.latency_ms ? `${Math.round(item.latency_ms)} ms` : '—'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3.5">
+                              <RiskBadge level={item.risk_level} />
+                            </td>
+                            <td className="px-4 py-3.5 text-right font-bold tabular-nums text-foreground">
+                              {item.risk_score}/100
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Right 5-col Stack: Goal/Taxonomy Progress + AI Forensic Assistant */}
+            <div className="lg:col-span-5 flex flex-col gap-5">
+              {/* Card 1: Goal Progress style card */}
+              <div className={`${CARD} p-6`}>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-foreground">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="5" width="20" height="14" rx="2" />
+                      <line x1="2" y1="10" x2="22" y2="10" />
+                    </svg>
+                  </span>
+                  <h2 className="tl-serif text-xl text-foreground">Threat Ratio & Taxonomy</h2>
+                </div>
+
+                <div className="mt-4 flex items-center gap-4">
+                  <div className="shrink-0">
+                    <span className="text-3xl font-bold tabular-nums text-[#7E22CE] dark:text-[#C084FC]">
+                      {threatRatioPct}%
+                    </span>
+                    <span className="ml-1.5 text-xs text-muted">high-risk share</span>
+                  </div>
+                  <SegmentedTickBar pct={threatRatioPct} />
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-4 pt-3 border-t border-border-default">
+                  {liveMeters.map((m) => (
+                    <div key={m.label}>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-base font-bold tabular-nums text-[#7E22CE] dark:text-[#C084FC]">
+                          {m.pct}%
+                        </span>
+                        <span className="truncate text-[11px] text-muted">{m.label}</span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+                        <div
+                          className="h-full rounded-full bg-[#8B3DFF]"
+                          style={{ width: `${Math.max(4, m.pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Card 2: AI Forensic Assistant matching RevenueX "AI Analytics Assistant" */}
+              <div className="rounded-[24px] border border-[#CEE0FA] dark:border-border-default tl-sky-mesh p-6 shadow-[var(--shadow-card)] flex-1 flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/80 dark:bg-surface text-foreground shadow-2xs">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z" />
+                      </svg>
+                    </span>
+                    <h2 className="tl-serif text-xl text-[#141416] dark:text-foreground">
+                      AI Forensic Assistant
+                    </h2>
+                  </div>
+
+                  <span className="rounded-full border border-black/10 bg-white/75 dark:bg-surface px-3 py-1 text-[11px] font-medium text-[#141416] dark:text-foreground">
+                    {metrics?.ml_engine?.model_loaded ? '15k TF-IDF Live' : '4-Engine Core'}
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-2.5 rounded-2xl bg-white/45 dark:bg-black/20 p-3 backdrop-blur-md border border-white/60 dark:border-white/10">
+                  <div className="rounded-xl bg-white/95 dark:bg-surface px-3.5 py-2.5 text-xs font-medium text-[#141416] dark:text-foreground shadow-2xs">
+                    What insights are active across SOC channels?
+                  </div>
+                  <div className="rounded-xl bg-white/95 dark:bg-surface px-3.5 py-2.5 text-xs leading-relaxed text-[#4B5563] dark:text-muted shadow-2xs">
+                    Lead campaign <strong className="text-[#141416] dark:text-foreground">{activeCampaign.signature.slice(0, 26)}</strong> has{' '}
+                    <strong className="text-[#141416] dark:text-foreground">{activeCampaign.hits} correlated hits</strong> across{' '}
+                    {activeCampaign.distinct_users} targets. HMAC audit chain is{' '}
+                    <strong className={chainVerification?.valid === false ? 'text-risk-critical' : 'text-[#158067]'}>
+                      {chainVerification?.valid === false ? 'flagged for review' : 'cryptographically verified'}
+                    </strong>.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* BENTO ROW 3: Interactive 3D Correlation Topology + Most-Abused Techniques */}
+          <div id="topology" className="grid grid-cols-1 lg:grid-cols-12 gap-5 scroll-mt-6">
+            <div className={`lg:col-span-7 ${CARD} p-5 sm:p-6 flex flex-col`}>
+              <div className="flex items-center justify-between pb-4">
+                <div>
+                  <h2 className="tl-serif text-xl text-foreground">3D Campaign Correlation Map</h2>
+                  <p className="text-xs text-muted">
+                    Interactive node cluster across EN, Roman Urdu & Raast vectors
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className={BTN.secondary}
+                >
+                  {isFullscreen ? 'Exit Fullscreen' : 'Expand'}
+                </button>
+              </div>
+
+              <div
+                className={`relative flex-1 min-h-[340px] ${
+                  isFullscreen ? 'fixed inset-4 z-50 rounded-[24px] shadow-2xl' : ''
+                }`}
+              >
+                <VectorNodesMap3D
+                  nodes={liveVectorNodes}
+                  selectedNode={selectedNode}
+                  onSelectNode={(node) => setSelectedNode(node)}
+                />
+                {isFullscreen && (
+                  <button
+                    type="button"
+                    onClick={() => setIsFullscreen(false)}
+                    className="absolute top-4 right-4 z-20 rounded-full bg-brand px-4 py-1.5 text-xs font-semibold text-brand-foreground shadow-lg"
+                  >
+                    Close Fullscreen
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="lg:col-span-5 flex flex-col gap-5">
+              {stats && <TechniqueBars stats={stats} />}
+              <div className={`${CARD} p-5`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="tl-serif text-lg text-foreground">Peak Risk Posture</h3>
+                    <p className="text-xs text-muted">Live Khatra index: {khatraLevel}</p>
+                  </div>
+                  <RiskBadge level={activeCampaign.severity} score={cockpitRiskScore} />
+                </div>
+                <RiskShield3D score={cockpitRiskScore} level={khatraLevel} />
+              </div>
+            </div>
+          </div>
+
+          {/* BENTO ROW 4: Correlated Campaigns Registry */}
+          <CampaignTable campaigns={campaigns ?? []} />
+
+          {/* BENTO ROW 5: Dynamic IOC Blocklist Controls */}
+          <IOCBlocklistManager iocs={iocs ?? []} onChanged={handleRefresh} />
+
+          {/* BENTO ROW 6: Cryptographic Audit Trail & RBAC Operator Roster */}
+          <div className="grid gap-5 lg:grid-cols-2">
+            <AuditTrail
+              logs={logs ?? []}
+              verification={chainVerification}
+              onVerify={handleVerifyChain}
+              verifying={verifyingChain}
+              onExportCsv={handleExportAudit}
+            />
+            <UserRoster users={users ?? []} onActionSuccess={handleRefresh} />
+          </div>
         </div>
       </div>
     </div>
@@ -1403,13 +1574,10 @@ function SocDashboard() {
 
 export default function DashboardPage() {
   return (
-    <>
-      <main className="flex-1 bg-[#040711]">
-        <RequireAuth adminOnly>
-          <SocDashboard />
-        </RequireAuth>
-      </main>
-      <Footer />
-    </>
+    <main className="flex-1 bg-background">
+      <RequireAuth adminOnly>
+        <SocDashboard />
+      </RequireAuth>
+    </main>
   );
 }

@@ -18,7 +18,7 @@ export default function NotificationTray() {
     refetchInterval: 15000,
   });
 
-  const { data: notifications = [], refetch } = useQuery<Notification[]>({
+  const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ['notifications', 'list'],
     queryFn: () => api.notifications.list(20),
     enabled: open,
@@ -61,7 +61,7 @@ export default function NotificationTray() {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-ink-border bg-white/5 text-ink-muted transition-colors hover:bg-white/10 hover:text-ink-foreground focus:outline-none"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full border border-border-default bg-surface text-foreground shadow-2xs transition-colors hover:bg-surface-muted focus:outline-none"
         aria-label="View notifications"
         title="Notifications"
       >
@@ -70,7 +70,7 @@ export default function NotificationTray() {
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          strokeWidth="2"
+          strokeWidth="1.9"
         >
           <path
             strokeLinecap="round"
@@ -79,19 +79,19 @@ export default function NotificationTray() {
           />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-risk-critical px-1 text-[10px] font-bold text-white shadow-sm animate-pulse">
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-brand-foreground shadow-sm">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-ink-border bg-ink p-3 shadow-2xl backdrop-blur-2xl z-50 animate-in fade-in zoom-in-95 duration-150">
-          <div className="flex items-center justify-between border-b border-ink-border pb-2 px-1">
+        <div className="absolute right-0 mt-2.5 w-80 sm:w-96 rounded-[22px] border border-border-default bg-surface p-3.5 shadow-[var(--shadow-lift)] z-50">
+          <div className="flex items-center justify-between border-b border-border-default pb-2.5 px-1">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm text-ink-foreground">Notifications</span>
+              <span className="tl-serif text-lg text-foreground">Notifications</span>
               {unreadCount > 0 && (
-                <span className="rounded-md bg-risk-critical/20 px-1.5 py-0.5 text-[10px] font-bold text-risk-critical">
+                <span className="rounded-full bg-[#FCE4E4] px-2 py-0.5 text-[10px] font-bold text-risk-critical">
                   {unreadCount} new
                 </span>
               )}
@@ -100,16 +100,16 @@ export default function NotificationTray() {
               <button
                 type="button"
                 onClick={() => markAllReadMutation.mutate()}
-                className="text-xs text-brand hover:underline"
+                className="text-xs font-semibold text-[#7C3AED] hover:underline"
               >
                 Mark all read
               </button>
             )}
           </div>
 
-          <div className="mt-2 max-h-72 overflow-y-auto divide-y divide-ink-border/50 tl-scroll">
+          <div className="mt-2 max-h-72 overflow-y-auto space-y-1.5 tl-scroll">
             {notifications.length === 0 ? (
-              <div className="py-8 text-center text-xs text-ink-muted">
+              <div className="py-8 text-center text-xs text-muted">
                 No notifications yet. Alerts for high-risk threats will appear here.
               </div>
             ) : (
@@ -117,19 +117,21 @@ export default function NotificationTray() {
                 <div
                   key={n.id}
                   onClick={() => !n.is_read && markReadMutation.mutate(n.id)}
-                  className={`p-2.5 rounded-xl transition-colors cursor-pointer text-left ${
-                    n.is_read ? 'opacity-70 hover:bg-white/5' : 'bg-white/5 hover:bg-white/10'
+                  className={`p-3 rounded-2xl transition-colors cursor-pointer text-left ${
+                    n.is_read
+                      ? 'opacity-70 hover:bg-surface-muted'
+                      : 'bg-surface-muted/80 hover:bg-surface-hover border border-border-default/60'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-xs font-semibold text-ink-foreground">
+                    <span className="text-xs font-semibold text-foreground">
                       {n.title}
                     </span>
-                    <span className="shrink-0 text-[10px] text-ink-muted">
+                    <span className="shrink-0 text-[10px] text-muted">
                       {relativeTime(n.created_at)}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-ink-muted leading-relaxed line-clamp-2">
+                  <p className="mt-1 text-xs text-muted leading-relaxed line-clamp-2">
                     {n.message}
                   </p>
                 </div>

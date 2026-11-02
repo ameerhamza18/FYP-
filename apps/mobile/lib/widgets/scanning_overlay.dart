@@ -1,23 +1,15 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../main.dart';
 import 'cyber_shield_3d.dart';
 
-/// Animated Scanning State overlay matching Screen 3 from `mobile-app.jpg`.
-///
-/// Features:
-/// - Expanding concentric radar pulse waves
-/// - Floating 3D holographic shield at center
-/// - Pulsing status text: "TrustLayer AI is actively scanning..."
-/// - Subtitle: "detecting anomalies."
-/// - 3 animated pulsing pagination dots
+/// Soft pastel scanning overlay matching Shieldly AI's clean, calm aesthetic.
 class ScanningOverlay extends StatefulWidget {
   const ScanningOverlay({
     super.key,
     this.message = 'TrustLayer AI is actively scanning…',
-    this.submessage = 'detecting anomalies.',
+    this.submessage = 'Inspecting signals across 4 forensic engines.',
   });
 
   final String message;
@@ -56,44 +48,51 @@ class _ScanningOverlayState extends State<ScanningOverlay>
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: TrustLayerColors.background.withOpacity(0.92),
+      color: TrustLayerColors.background.withOpacity(0.94),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Center scanning radar waves with 3D Shield
             SizedBox(
-              width: 260,
-              height: 260,
+              width: 240,
+              height: 240,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Animated expanding concentric wave circles
                   AnimatedBuilder(
                     animation: _waveController,
                     builder: (context, child) {
                       return CustomPaint(
-                        size: const Size(260, 260),
+                        size: const Size(240, 240),
                         painter: _RadarWavesPainter(
                           progress: _waveController.value,
-                          glowColor: TrustLayerColors.primary,
+                          glowColor: TrustLayerColors.accent,
                         ),
                       );
                     },
                   ),
-
-                  // Floating 3D Crystal Shield
-                  const CyberShield3D(
-                    size: 190,
-                    glowColor: TrustLayerColors.primary,
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: TrustLayerColors.periwinkle.withOpacity(0.7),
+                          blurRadius: 32,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: const CyberShield3D(
+                      size: 132,
+                      glowColor: TrustLayerColors.accent,
+                    ),
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 38),
-
-            // Scanning Status Text
+            const SizedBox(height: 32),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 36),
               child: Column(
@@ -101,26 +100,23 @@ class _ScanningOverlayState extends State<ScanningOverlay>
                   Text(
                     widget.message,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
                       color: TrustLayerColors.textPrimary,
-                      letterSpacing: 0.3,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     widget.submessage,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.plusJakartaSans(
                       fontSize: 13,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.w500,
                       color: TrustLayerColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // 3 Animated Glowing Pulsing Dots
                   AnimatedBuilder(
                     animation: _dotsController,
                     builder: (context, child) {
@@ -130,23 +126,16 @@ class _ScanningOverlayState extends State<ScanningOverlay>
                         children: List.generate(3, (index) {
                           final phase = (val + (index * 0.33)) % 1.0;
                           final isActive = phase > 0.4 && phase < 0.8;
-                          return Container(
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
                             margin: const EdgeInsets.symmetric(horizontal: 4),
-                            width: isActive ? 16 : 6,
-                            height: 6,
+                            width: isActive ? 18 : 7,
+                            height: 7,
                             decoration: BoxDecoration(
                               color: isActive
                                   ? TrustLayerColors.primary
-                                  : Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(3),
-                              boxShadow: isActive
-                                  ? [
-                                      BoxShadow(
-                                        color: TrustLayerColors.primary.withOpacity(0.6),
-                                        blurRadius: 8,
-                                      ),
-                                    ]
-                                  : null,
+                                  : TrustLayerColors.periwinkle,
+                              borderRadius: BorderRadius.circular(4),
                             ),
                           );
                         }),
@@ -177,16 +166,15 @@ class _RadarWavesPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final maxRadius = size.width / 2;
 
-    // 3 progressive wave rings
     for (int i = 0; i < 3; i++) {
       final waveProgress = (progress + (i / 3.0)) % 1.0;
-      final radius = maxRadius * (0.45 + waveProgress * 0.55);
-      final opacity = (1.0 - waveProgress) * 0.4;
+      final radius = maxRadius * (0.42 + waveProgress * 0.56);
+      final opacity = (1.0 - waveProgress) * 0.35;
 
       final wavePaint = Paint()
         ..color = glowColor.withOpacity(opacity.clamp(0.0, 1.0))
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.6;
+        ..strokeWidth = 2.0;
 
       canvas.drawCircle(center, radius, wavePaint);
     }

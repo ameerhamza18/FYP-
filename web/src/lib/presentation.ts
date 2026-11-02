@@ -21,9 +21,7 @@ export function riskTone(level?: string | null): Tone {
 }
 
 /**
- * Tone -> Tailwind utility maps. Kept as complete literal class strings so
- * Tailwind's compiler can see them (dynamic `text-risk-${tone}` would not be
- * detected and the styles would be purged).
+ * Tone -> Tailwind utility maps matching Shieldly AI & RevenueX soft pastel pills.
  */
 export const TONE_TEXT: Record<Tone, string> = {
   critical: 'text-risk-critical',
@@ -42,11 +40,11 @@ export const TONE_BG: Record<Tone, string> = {
 };
 
 export const TONE_SOFT: Record<Tone, string> = {
-  critical: 'bg-risk-critical/10 border-risk-critical/25',
-  high: 'bg-risk-high/10 border-risk-high/25',
-  medium: 'bg-risk-medium/10 border-risk-medium/25',
-  low: 'bg-risk-low/10 border-risk-low/25',
-  info: 'bg-risk-info/10 border-risk-info/25',
+  critical: 'bg-[#FCE4E4] border-[#F6C8C8] dark:bg-risk-critical/15 dark:border-risk-critical/30',
+  high: 'bg-[#FDE9DC] border-[#F8CEB4] dark:bg-risk-high/15 dark:border-risk-high/30',
+  medium: 'bg-[#FFF5CC] border-[#F3DF8D] dark:bg-risk-medium/15 dark:border-risk-medium/30',
+  low: 'bg-[#DFF4EC] border-[#BCE6D7] dark:bg-risk-low/15 dark:border-risk-low/30',
+  info: 'bg-[#ECE9FE] border-[#D8D0FC] dark:bg-risk-info/15 dark:border-risk-info/30',
 };
 
 /** CSS variable reference, for SVG strokes/fills that follow the theme. */

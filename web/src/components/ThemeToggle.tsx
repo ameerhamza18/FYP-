@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * Light/dark switch. The choice is persisted in localStorage and applied by
- * the inline bootstrap script in `app/layout.tsx` before first paint, so there
- * is no theme flash on reload. Keep the storage key in sync with that script.
+ * Light/dark switch. Defaults to the warm-ivory light theme (matching the
+ * Shieldly AI & RevenueX reference designs) and persists explicit toggles in
+ * localStorage. Keep THEME_STORAGE_KEY in sync with `app/layout.tsx`.
  */
 import { useCallback, useEffect, useState } from 'react';
 
-export const THEME_STORAGE_KEY = 'trustlayer.theme';
+export const THEME_STORAGE_KEY = 'trustlayer.theme.v2';
 
 type Theme = 'light' | 'dark';
 
@@ -17,13 +17,9 @@ export default function ThemeToggle({ onInk = false }: { onInk?: boolean }) {
 
   useEffect(() => {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    const initial: Theme =
-      stored === 'dark' || stored === 'light'
-        ? stored
-        : window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light';
+    const initial: Theme = stored === 'dark' ? 'dark' : 'light';
     setTheme(initial);
+    document.documentElement.classList.toggle('dark', initial === 'dark');
     setMounted(true);
   }, []);
 
@@ -35,18 +31,16 @@ export default function ThemeToggle({ onInk = false }: { onInk?: boolean }) {
   }, [theme]);
 
   const base =
-    'inline-flex h-9 w-9 items-center justify-center rounded-xl border transition-colors';
+    'inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all';
   const skin = onInk
-    ? 'border-ink-border bg-white/5 text-ink-muted hover:bg-white/10 hover:text-ink-foreground'
-    : 'border-border-default bg-surface text-muted hover:bg-surface-muted hover:text-foreground';
+    ? 'border-border-default bg-surface text-muted hover:bg-surface-muted hover:text-foreground shadow-2xs'
+    : 'border-border-default bg-surface text-muted hover:bg-surface-muted hover:text-foreground shadow-2xs';
 
   const label =
     theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
 
   return (
     <button type="button" onClick={toggle} className={`${base} ${skin}`} aria-label={label} title={label}>
-      {/* Render a stable placeholder until the stored theme is known, so the
-          server and client markup never disagree. */}
       {!mounted ? (
         <span className="h-4 w-4" aria-hidden />
       ) : theme === 'dark' ? (

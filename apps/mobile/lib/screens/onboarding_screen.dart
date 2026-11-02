@@ -8,14 +8,7 @@ import '../widgets/cyber_shield_3d.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
-/// Premium Onboarding Screen matching Screen 1 from `mobile-app.jpg`.
-///
-/// Features:
-/// - Brand Header: TrustLayer 3D badge with cyan shield icon
-/// - Center: High-fidelity 3D metallic chrome shield with soft cyan ambient aura
-/// - Typography: "TrustLayer." and "AI Protection Against Social Engineering."
-/// - Page Indicators: 3 futuristic pagination dots
-/// - Action Button: "Get Started" tactical glow pill
+/// Soft pastel Onboarding Tour styled after Shieldly AI.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -31,19 +24,28 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   final List<Map<String, dynamic>> _pages = [
     {
-      'title': 'TrustLayer.',
-      'subtitle': 'AI Protection Against\nSocial Engineering.',
-      'glow': const Color(0xFF38BDF8),
+      'title': 'Meet TrustLayer AI',
+      'subtitle':
+          'Paste suspicious texts, links, or screenshots and get instant forensic answers.',
+      'cardBg': TrustLayerColors.periwinkle,
+      'glow': const Color(0xFF6D5DFB),
+      'pill': '• Multimodal AI',
     },
     {
-      'title': 'Real-time SMS & URL Scanning',
-      'subtitle': 'Intercept threats before they reach you.',
-      'glow': const Color(0xFF10B981),
+      'title': 'Live SMS & Chat Guard',
+      'subtitle':
+          'Automatically checks incoming SMS and chat notifications before you tap risky links.',
+      'cardBg': TrustLayerColors.sage,
+      'glow': const Color(0xFF158067),
+      'pill': '• Real-time Shield',
     },
     {
-      'title': 'Instant AI Verdicts',
-      'subtitle': 'Get detailed threat analysis in milliseconds.',
-      'glow': const Color(0xFFF43F5E),
+      'title': 'Clear, Honest Verdicts',
+      'subtitle':
+          'See exact 0–100 risk scores, manipulation tactics, and step-by-step safety guidance.',
+      'cardBg': TrustLayerColors.butter,
+      'glow': const Color(0xFF9A6B00),
+      'pill': '• Zero-Disk Privacy',
     },
   ];
 
@@ -53,7 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _pageController = PageController();
     _floatController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3000),
+      duration: const Duration(milliseconds: 2800),
     )..repeat(reverse: true);
   }
 
@@ -67,7 +69,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Future<void> _onGetStarted() async {
     if (_currentPage < _pages.length - 1) {
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 400),
+        duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
       );
       return;
@@ -103,72 +105,66 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       backgroundColor: TrustLayerColors.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 22),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Top Brand Pill: "TrustLayer 3D"
+              // Top Brand Header
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: TrustLayerColors.surfaceElevated,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: TrustLayerColors.primary.withOpacity(0.35),
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: TrustLayerColors.primary.withOpacity(0.12),
-                          blurRadius: 16,
-                          spreadRadius: 1,
-                        ),
-                      ],
+                      color: TrustLayerColors.headerWarm,
+                      borderRadius: BorderRadius.circular(22),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(
-                          Icons.shield_rounded,
+                          Icons.auto_awesome_rounded,
                           size: 16,
-                          color: TrustLayerColors.primary,
+                          color: TrustLayerColors.textPrimary,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 7),
                         Text(
-                          'TrustLayer',
-                          style: GoogleFonts.inter(
+                          'TrustLayer AI',
+                          style: GoogleFonts.plusJakartaSans(
                             color: TrustLayerColors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13.5,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '3D',
-                          style: GoogleFonts.jetBrainsMono(
-                            color: TrustLayerColors.primary,
                             fontWeight: FontWeight.w800,
-                            fontSize: 12,
+                            fontSize: 13.5,
                           ),
                         ),
                       ],
                     ),
                   ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    },
+                    child: Text(
+                      'Skip',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: TrustLayerColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
                 ],
               ),
 
-              // Center: PageView with Floating 3D Chrome Shield & Content
+              const SizedBox(height: 16),
+
+              // PageView with Pastel Cards
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
                   onPageChanged: (index) {
-                    setState(() {
-                      _currentPage = index;
-                    });
+                    setState(() => _currentPage = index);
                   },
                   itemCount: _pages.length,
                   itemBuilder: (context, index) {
@@ -176,40 +172,77 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     return Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        AnimatedBuilder(
-                          animation: _floatController,
-                          builder: (context, child) {
-                            final translateY = (_floatController.value - 0.5) * 14.0;
-                            return Transform.translate(
-                              offset: Offset(0, translateY),
-                              child: child,
-                            );
-                          },
-                          child: CyberShield3D(
-                            size: 240,
-                            glowColor: page['glow'] as Color,
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 34,
+                          ),
+                          decoration: BoxDecoration(
+                            color: page['cardBg'] as Color,
+                            borderRadius: BorderRadius.circular(34),
+                          ),
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.85),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  page['pill'] as String,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: TrustLayerColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 22),
+                              AnimatedBuilder(
+                                animation: _floatController,
+                                builder: (context, child) {
+                                  final translateY =
+                                      (_floatController.value - 0.5) * 10.0;
+                                  return Transform.translate(
+                                    offset: Offset(0, translateY),
+                                    child: child,
+                                  );
+                                },
+                                child: CyberShield3D(
+                                  size: 195,
+                                  glowColor: page['glow'] as Color,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 48),
+                        const SizedBox(height: 32),
                         Text(
                           page['title'] as String,
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 27,
+                            fontWeight: FontWeight.w800,
                             color: TrustLayerColors.textPrimary,
                             letterSpacing: -0.5,
                           ),
                         ),
                         const SizedBox(height: 10),
-                        Text(
-                          page['subtitle'] as String,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            height: 1.4,
-                            fontWeight: FontWeight.w400,
-                            color: TrustLayerColors.textSecondary,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            page['subtitle'] as String,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 14.5,
+                              height: 1.5,
+                              color: TrustLayerColors.textSecondary,
+                            ),
                           ),
                         ),
                       ],
@@ -218,99 +251,52 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 ),
               ),
 
-              // Bottom Section: Dots, & CTA
+              // Dots & Jet-Black Pill CTA
               Column(
                 children: [
-                  // 3-dots page indicator
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _pages.length,
-                      (index) {
-                        final isActive = _currentPage == index;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: isActive ? 18 : 6,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? TrustLayerColors.primary
-                                : Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(4),
-                            boxShadow: isActive
-                                ? [
-                                    BoxShadow(
-                                      color: TrustLayerColors.primary.withOpacity(0.6),
-                                      blurRadius: 6,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // "Get Started" or "Next" CTA Button
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    child: SizedBox(
-                      key: ValueKey<int>(_currentPage),
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton(
-                        onPressed: _onGetStarted,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _currentPage == _pages.length - 1
-                              ? const Color(0xFF0C172B)
-                              : TrustLayerColors.surfaceElevated,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28),
-                            side: BorderSide(
-                              color: _currentPage == _pages.length - 1
-                                  ? TrustLayerColors.primary.withOpacity(0.6)
-                                  : TrustLayerColors.textSecondary.withOpacity(0.2),
-                              width: 1.4,
-                            ),
-                          ),
-                          shadowColor: _currentPage == _pages.length - 1
-                              ? TrustLayerColors.primary.withOpacity(0.3)
-                              : Colors.transparent,
+                    children: List.generate(_pages.length, (index) {
+                      final isActive = _currentPage == index;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.symmetric(horizontal: 3.5),
+                        width: isActive ? 22 : 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? TrustLayerColors.primary
+                              : TrustLayerColors.surfaceBorder,
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(28),
-                            boxShadow: _currentPage == _pages.length - 1
-                                ? [
-                                    BoxShadow(
-                                      color: TrustLayerColors.primary.withOpacity(0.18),
-                                      blurRadius: 20,
-                                      spreadRadius: 1,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Center(
-                            child: Text(
-                              _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: FilledButton(
+                      onPressed: _onGetStarted,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: TrustLayerColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        _currentPage == _pages.length - 1
+                            ? 'Get Started'
+                            : 'Continue',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
                 ],
               ),
             ],

@@ -8,21 +8,43 @@ import 'services/api_client.dart';
 import 'services/token_store.dart';
 import 'widgets/cyber_shield_3d.dart';
 
+/// Shieldly AI-inspired soft pastel & warm editorial color system.
 class TrustLayerColors {
-  static const Color primary = Color(0xFF38BDF8); // Cyan-400
-  static const Color primaryDark = Color(0xFF0284C7); // Sky-600
-  static const Color accent = Color(0xFF3B82F6); // Electric Blue
-  static const Color background = Color(0xFF040711); // Deep Obsidian
-  static const Color surface = Color(0xFF0A1122); // Carbon Surface
-  static const Color surfaceElevated = Color(0xFF101C36); // Elevated Card
-  static const Color surfaceBorder = Color(0xFF1E2D4A); // Tactical Hairline Border
-  static const Color textPrimary = Color(0xFFF1F5F9); // Slate-100
-  static const Color textSecondary = Color(0xFF94A3B8); // Slate-400
-  static const Color textMuted = Color(0xFF64748B); // Slate-500
-  static const Color critical = Color(0xFFEF4444); // Crimson Alert
-  static const Color high = Color(0xFFF97316); // High Warning Orange
-  static const Color medium = Color(0xFFFBBF24); // Medium Caution Amber
-  static const Color low = Color(0xFF10B981); // Verified Emerald
+  // Primary Jet-Black Pill & Active Dock Accent
+  static const Color primary = Color(0xFF16161A);
+  static const Color primaryDark = Color(0xFF0E0E11);
+  static const Color accent = Color(0xFF6D5DFB);
+
+  // Warm Cream Header & Cool Alabaster Body
+  static const Color background = Color(0xFFF6F6F9);
+  static const Color headerWarm = Color(0xFFF5EBE2);
+  static const Color headerButton = Color(0xFFEADDD1);
+
+  // Crisp White Sheets & Soft Pill Rows
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color surfaceElevated = Color(0xFFF3F4F8);
+  static const Color surfaceBorder = Color(0xFFE8E6E1);
+
+  // Typography
+  static const Color textPrimary = Color(0xFF16161A);
+  static const Color textSecondary = Color(0xFF6B6B76);
+  static const Color textMuted = Color(0xFF9A9AA6);
+
+  // Signature Pastel Card Surfaces (Shieldly AI)
+  static const Color periwinkle = Color(0xFFC8D2FA);
+  static const Color sage = Color(0xFFCBE3DF);
+  static const Color sand = Color(0xFFEBDDD3);
+  static const Color butter = Color(0xFFE5D283);
+
+  // Semantic Risk Text & Soft Pill Backgrounds
+  static const Color critical = Color(0xFFD9383A);
+  static const Color high = Color(0xFFD95D1E);
+  static const Color medium = Color(0xFF9A6B00);
+  static const Color low = Color(0xFF158067);
+
+  static const Color pillSafeBg = Color(0xFFD8F1EA);
+  static const Color pillScamBg = Color(0xFFFADBD8);
+  static const Color pillRiskyBg = Color(0xFFFCF3CF);
 }
 
 void main() {
@@ -90,45 +112,39 @@ class _TrustLayerAppState extends State<TrustLayerApp> with WidgetsBindingObserv
 
   @override
   Widget build(BuildContext context) {
+    final baseLight = ThemeData.light(useMaterial3: true);
     return MaterialApp(
       title: 'TrustLayer',
       navigatorKey: tlNavigatorKey,
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: TrustLayerColors.primary,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
+      themeMode: ThemeMode.light,
+      theme: baseLight.copyWith(
         scaffoldBackgroundColor: TrustLayerColors.background,
-        colorScheme: const ColorScheme.dark(
+        colorScheme: const ColorScheme.light(
           primary: TrustLayerColors.primary,
+          secondary: TrustLayerColors.accent,
           surface: TrustLayerColors.surface,
-          onPrimary: Color(0xFF040711),
+          onPrimary: Colors.white,
           onSurface: TrustLayerColors.textPrimary,
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: TrustLayerColors.background,
+          backgroundColor: TrustLayerColors.headerWarm,
+          foregroundColor: TrustLayerColors.textPrimary,
           elevation: 0,
           scrolledUnderElevation: 0,
-          centerTitle: false,
+          centerTitle: true,
         ),
-        cardTheme: CardTheme(
-          color: TrustLayerColors.surface,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: TrustLayerColors.surfaceBorder, width: 1),
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: TrustLayerColors.primary,
+          contentTextStyle: GoogleFonts.plusJakartaSans(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
           ),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
-        textTheme: GoogleFonts.interTextTheme(
-          ThemeData.dark().textTheme,
-        ),
-        useMaterial3: true,
+        textTheme: GoogleFonts.plusJakartaSansTextTheme(baseLight.textTheme),
       ),
       home: const SplashScreen(),
     );
@@ -142,7 +158,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _pulseController;
 
   @override
@@ -166,7 +183,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   /// fails with 401. If no token, user enters the Onboarding Tour.
   Future<void> _route() async {
     await ApiConfig.loadOverride();
-    // Artificial 1-second delay so splash renders smoothly
     await Future.delayed(const Duration(milliseconds: 1200));
     final token = await TokenStore.read();
     if (!mounted) return;
@@ -198,7 +214,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: TrustLayerColors.background,
+      backgroundColor: TrustLayerColors.headerWarm,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -206,34 +222,54 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             AnimatedBuilder(
               animation: _pulseController,
               builder: (context, child) {
-                final scale = 1.0 + (_pulseController.value * 0.05);
+                final scale = 1.0 + (_pulseController.value * 0.045);
                 return Transform.scale(
                   scale: scale,
-                  child: const CyberShield3D(
-                    size: 130,
-                    glowColor: TrustLayerColors.primary,
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: TrustLayerColors.periwinkle.withOpacity(0.55),
+                          blurRadius: 36,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: const CyberShield3D(
+                      size: 112,
+                      glowColor: TrustLayerColors.accent,
+                    ),
                   ),
                 );
               },
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 26),
             Text(
-              'TRUSTLAYER',
-              style: GoogleFonts.inter(
-                fontSize: 22,
+              'TrustLayer AI',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 26,
                 fontWeight: FontWeight.w800,
-                letterSpacing: 3.5,
+                letterSpacing: -0.5,
                 color: TrustLayerColors.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'AUTONOMOUS CYBER DEFENSE CORE',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 9.5,
-                letterSpacing: 2.2,
-                fontWeight: FontWeight.w600,
-                color: TrustLayerColors.primary.withOpacity(0.85),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.85),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Instant Scam & Fraud Protection',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: TrustLayerColors.textSecondary,
+                ),
               ),
             ),
           ],

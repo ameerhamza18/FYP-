@@ -1,6 +1,6 @@
 import RiskVortex from '@/components/analysis/RiskVortex';
-import { CARD, Chip, RiskBadge } from '@/components/ui';
-import { riskTone, TONE_BG, TONE_TEXT } from '@/lib/presentation';
+import { BTN, CARD, Chip, RiskBadge } from '@/components/ui';
+import { riskTone, TONE_BG, TONE_SOFT, TONE_TEXT } from '@/lib/presentation';
 import type { AnalysisDetail } from '@/lib/types';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -10,10 +10,10 @@ import { toast } from 'sonner';
  * URL channels already report 0–100, so the ML value is scaled for display.
  */
 const ENGINES: { key: keyof AnalysisDetail; label: string; scale: number; code: string }[] = [
-  { key: 'ml_score', label: 'Neural Classifier', scale: 100, code: 'CH_01 // ML' },
-  { key: 'rule_score', label: 'Deterministic Rules', scale: 1, code: 'CH_02 // HEUR' },
-  { key: 'intel_score', label: 'Threat Intel (IOC)', scale: 1, code: 'CH_03 // INTEL' },
-  { key: 'url_score', label: 'URL Forensics', scale: 1, code: 'CH_04 // URL' },
+  { key: 'ml_score', label: 'Neural Classifier', scale: 100, code: 'Channel 01 · ML' },
+  { key: 'rule_score', label: 'Deterministic Rules', scale: 1, code: 'Channel 02 · Heuristics' },
+  { key: 'intel_score', label: 'Threat Intel (IOC)', scale: 1, code: 'Channel 03 · Intel' },
+  { key: 'url_score', label: 'URL Forensics', scale: 1, code: 'Channel 04 · URL' },
 ];
 
 function asPercent(value: unknown, scale: number): number | null {
@@ -62,7 +62,7 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
   return (
     <div className="space-y-6">
       {/* Verdict & 3D Reactive Vortex */}
-      <section className={`${CARD} overflow-hidden border-border-default/80`}>
+      <section className={`${CARD} overflow-hidden`}>
         <div className="flex flex-col items-center gap-8 p-6 sm:flex-row sm:p-8">
           <div className="h-[250px] w-[250px] shrink-0">
             <RiskVortex score={analysis.risk_score} />
@@ -74,59 +74,70 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
               <Chip tone="brand">{analysis.threat_type}</Chip>
               <Chip>{analysis.input_type.toUpperCase()}</Chip>
               {analysis.campaign_flagged && (
-                <span className="inline-flex items-center gap-1.5 rounded-lg border border-risk-critical/40 bg-risk-critical/15 px-2.5 py-1 font-mono text-[10px] font-bold uppercase text-risk-critical">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-risk-critical/30 bg-[#FCE4E4] px-3 py-1 text-[11px] font-semibold text-risk-critical">
                   <span className="h-1.5 w-1.5 rounded-full bg-risk-critical tl-beacon" />
-                  COORDINATED CAMPAIGN
+                  Coordinated Campaign
                 </span>
               )}
             </div>
 
-            <h2 className={`mt-4 text-3xl font-black tracking-tight ${TONE_TEXT[tone]}`}>
-              {analysis.risk_score}/100 Risk Index
+            <h2 className={`tl-serif mt-4 text-4xl font-normal tracking-tight sm:text-5xl ${TONE_TEXT[tone]}`}>
+              {analysis.risk_score}
+              <span className="text-2xl text-muted"> / 100 Risk Index</span>
             </h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted">{analysis.explanation}</p>
+            <p className="mt-2.5 text-sm leading-relaxed text-muted">{analysis.explanation}</p>
 
-            <div className="mt-5 rounded-2xl border border-brand/25 bg-brand-soft/70 px-4 py-3.5 backdrop-blur-md">
-              <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-brand">
-                RESPONSE RECOMMENDATION
+            <div className="mt-5 rounded-[20px] border border-[#C8D2FA] bg-[#EEF1FE]/80 px-5 py-4 dark:border-border-default dark:bg-surface-muted">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#28326B] dark:text-[#C4B5FD]">
+                Recommended Action
               </p>
               <p className="mt-1 text-sm font-semibold text-foreground">
                 {analysis.recommendation}
               </p>
             </div>
 
-            <div className="mt-5 flex items-center justify-center sm:justify-start gap-3">
+            <div className="mt-5 flex items-center justify-center gap-3 sm:justify-start">
               <button
                 type="button"
                 onClick={handleExportReport}
-                className="flex items-center gap-2 rounded-xl border border-brand/40 bg-brand/10 px-4 py-2 text-xs font-mono font-semibold text-brand transition-all hover:bg-brand/20 active:scale-[0.99] shadow-sm"
+                className={BTN.secondary}
                 title="Download verifiable incident report for bank or police submission"
               >
-                <span>📄</span> Export Forensic Report (.JSON)
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export Forensic Report (.JSON)
               </button>
             </div>
           </div>
         </div>
 
         {/* Engine breakdown */}
-        <div className="border-t border-border-default bg-surface-muted/60 px-6 py-5 sm:px-8">
+        <div className="border-t border-border-default bg-surface-muted/65 px-6 py-5 sm:px-8">
           <div className="flex items-center justify-between pb-3">
-            <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-muted">
-              MULTI-CHANNEL TELEMETRY CONFIDENCE
+            <span className="text-xs font-bold text-foreground">
+              Multi-Channel Telemetry Confidence
             </span>
-            <span className="font-mono text-[10px] text-slate-500">4 CHANNELS FUSED</span>
+            <span className="rounded-full bg-surface px-2.5 py-0.5 text-[11px] font-medium text-muted border border-border-default">
+              4 Channels Fused
+            </span>
           </div>
-          <div className="mt-2 grid gap-4 sm:grid-cols-2">
+          <div className="mt-2 grid gap-3.5 sm:grid-cols-2">
             {rows.map((row) => (
-              <div key={row.label} className="rounded-xl border border-white/5 bg-background/50 p-3">
+              <div
+                key={row.label}
+                className="rounded-2xl border border-border-default bg-surface p-3.5 shadow-2xs"
+              >
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono text-[10px] text-muted">{row.code}</span>
+                  <span className="text-[11px] font-medium text-muted">{row.code}</span>
                   <span className="font-bold tabular-nums text-foreground">
-                    {row.percent === null ? 'INACTIVE' : `${row.percent}%`}
+                    {row.percent === null ? 'Inactive' : `${row.percent}%`}
                   </span>
                 </div>
-                <div className="mt-2 text-xs font-medium text-foreground">{row.label}</div>
-                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+                <div className="mt-1.5 text-xs font-semibold text-foreground">{row.label}</div>
+                <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
                   {row.percent !== null && (
                     <div
                       className={`h-full rounded-full ${TONE_BG[tone]}`}
@@ -143,14 +154,19 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
       {/* Indicators + techniques */}
       <div className="grid gap-6 lg:grid-cols-2">
         <section className={`${CARD} p-6`}>
-          <div className="flex items-center justify-between border-b border-border-default pb-3">
-            <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-muted">
-              DETECTION INDICATORS ({analysis.indicators.length})
+          <div className="flex items-center justify-between border-b border-border-default pb-3.5">
+            <h3 className="tl-serif text-2xl font-normal text-foreground">
+              Detection Indicators{' '}
+              <span className="font-sans text-sm font-semibold text-muted">
+                ({analysis.indicators.length})
+              </span>
             </h3>
-            <span className="font-mono text-[10px] text-slate-500">SIGNALS TRIGGERED</span>
+            <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-medium text-muted">
+              Signals Triggered
+            </span>
           </div>
           {analysis.indicators.length === 0 ? (
-            <p className="mt-4 text-xs text-muted">
+            <p className="mt-4 text-sm text-muted">
               Zero rule or intelligence signatures triggered for this payload.
             </p>
           ) : (
@@ -160,19 +176,19 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
                 return (
                   <li
                     key={`${indicator.title}-${index}`}
-                    className="tl-reticle-card rounded-xl border border-border-default bg-background/60 p-4 transition-colors hover:border-brand/30"
+                    className="rounded-2xl border border-border-default bg-surface-muted/60 p-4 transition-colors hover:bg-surface-muted"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className={`font-mono text-[10px] font-bold uppercase ${TONE_TEXT[indTone]}`}>
-                        [{indicator.severity}]
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase ${TONE_SOFT[indTone]} ${TONE_TEXT[indTone]}`}
+                      >
+                        • {indicator.severity}
                       </span>
-                      <span className="rounded border border-border-default bg-surface px-2 py-0.5 font-mono text-[9px] uppercase text-muted">
+                      <span className="rounded-full border border-border-default bg-surface px-2.5 py-0.5 text-[10px] font-medium uppercase text-muted">
                         {indicator.category}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm font-bold text-foreground">
-                      {indicator.title}
-                    </p>
+                    <p className="mt-2.5 text-sm font-bold text-foreground">{indicator.title}</p>
                     {indicator.detail && (
                       <p className="mt-1 text-xs leading-relaxed text-muted">{indicator.detail}</p>
                     )}
@@ -184,14 +200,19 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
         </section>
 
         <section className={`${CARD} p-6`}>
-          <div className="flex items-center justify-between border-b border-border-default pb-3">
-            <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-muted">
-              MANIPULATION TACTICS ({analysis.se_techniques.length})
+          <div className="flex items-center justify-between border-b border-border-default pb-3.5">
+            <h3 className="tl-serif text-2xl font-normal text-foreground">
+              Manipulation Tactics{' '}
+              <span className="font-sans text-sm font-semibold text-muted">
+                ({analysis.se_techniques.length})
+              </span>
             </h3>
-            <span className="font-mono text-[10px] text-slate-500">PSYCHOLOGICAL VECTORS</span>
+            <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-medium text-muted">
+              Psychological Vectors
+            </span>
           </div>
           {analysis.se_techniques.length === 0 ? (
-            <p className="mt-4 text-xs text-muted">
+            <p className="mt-4 text-sm text-muted">
               No social-engineering manipulation vectors detected.
             </p>
           ) : (
@@ -201,20 +222,20 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
                 return (
                   <li
                     key={`${technique.technique}-${index}`}
-                    className="tl-reticle-card rounded-xl border border-border-default bg-background/60 p-4 transition-colors hover:border-brand/30"
+                    className="rounded-2xl border border-border-default bg-surface-muted/60 p-4 transition-colors hover:bg-surface-muted"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-bold text-foreground">
                         {technique.technique}
                       </span>
                       <span
-                        className={`rounded-full border px-2 py-0.5 font-mono text-[9px] font-bold uppercase ${TONE_TEXT[techTone]}`}
+                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase ${TONE_SOFT[techTone]} ${TONE_TEXT[techTone]}`}
                       >
-                        {technique.intensity} INTENSITY
+                        {technique.intensity} intensity
                       </span>
                     </div>
                     {technique.evidence && (
-                      <div className="mt-2 rounded-lg border-l-2 border-brand bg-surface-muted/40 p-2.5 text-xs italic leading-relaxed text-slate-300">
+                      <div className="mt-2.5 rounded-xl border-l-2 border-[#8B3DFF] bg-surface px-3.5 py-2.5 text-xs italic leading-relaxed text-muted">
                         “{technique.evidence}”
                       </div>
                     )}
@@ -227,32 +248,37 @@ export default function ResultReport({ analysis }: { analysis: AnalysisDetail })
       </div>
 
       {/* Metadata Dossier */}
-      <section className={`${CARD} flex flex-wrap items-center justify-between gap-6 p-5 font-mono text-xs`}>
+      <section className={`${CARD} flex flex-wrap items-center justify-between gap-6 p-5 text-xs`}>
         <div>
-          <span className="text-[10px] uppercase text-muted block">End-to-End Latency</span>
-          <span className="mt-0.5 font-bold text-foreground">
+          <span className="block text-[11px] font-medium text-muted">End-to-End Latency</span>
+          <span className="mt-0.5 block text-sm font-bold text-foreground tabular-nums">
             {analysis.latency_ms === null || analysis.latency_ms === undefined
               ? '—'
               : `${Math.round(analysis.latency_ms)} ms`}
           </span>
         </div>
         <div>
-          <span className="text-[10px] uppercase text-muted block">Synthesizer Mode</span>
-          <span className="mt-0.5 font-bold text-foreground">
+          <span className="block text-[11px] font-medium text-muted">Synthesizer Mode</span>
+          <span className="mt-0.5 block text-sm font-bold text-foreground">
             {analysis.explanation_source === 'llm' ? 'Fine-Tuned LLM' : 'Rule Consensus Matrix'}
           </span>
         </div>
         <div>
-          <span className="text-[10px] uppercase text-muted block">Forensic Incident ID</span>
-          <span className="mt-0.5 font-bold text-brand-cyan">#IR-{analysis.id}</span>
+          <span className="block text-[11px] font-medium text-muted">Forensic Incident ID</span>
+          <span className="mt-0.5 block text-sm font-bold text-[#6D28D9] dark:text-[#C4B5FD]">
+            #IR-{analysis.id}
+          </span>
         </div>
         <div className="min-w-0 max-w-xs truncate">
-          <span className="text-[10px] uppercase text-muted block">Payload Snippet</span>
-          <span className="mt-0.5 truncate text-[11px] text-muted block" title={analysis.content_snippet}>
+          <span className="block text-[11px] font-medium text-muted">Payload Snippet</span>
+          <span
+            className="mt-0.5 block truncate text-xs text-muted"
+            title={analysis.content_snippet}
+          >
             {analysis.content_snippet}
           </span>
         </div>
       </section>
     </div>
   );
-}
+}

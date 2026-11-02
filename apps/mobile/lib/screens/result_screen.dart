@@ -1,47 +1,21 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../main.dart';
 import '../models/analysis_result.dart';
 
-/// Screen 4 ("Risk Result Screen") and Screen 5 ("Threat Analysis Breakdown")
-/// from `mobile-app.jpg`.
+/// Shieldly AI-styled Analysis Report screen.
 ///
-/// Features:
-/// - 3D Speedometer/Radial Gauge with calibrated tick marks, glowing arc, and numeric score (e.g. 88)
-/// - Alert Badge: "CRITICAL THREAT DETECTED" / "VERIFIED SECURE"
-/// - Social-Engineering Techniques Breakdown with dynamic colored bars:
-///   - Authority (Blue), Urgency (Cyan), Fear (Amber), Financial Pressure (Red/Orange)
-/// - AI Explanation card with forensic synthesis
-/// - Safety Recommendation card with glowing alert border
-/// - Technical Telemetry & Forensic Indicators drawer
-class ResultScreen extends StatefulWidget {
+/// Combines warm cream header blocks, soft pastel status pills, crisp white
+/// 28px cards, and full forensic telemetry (score gauge, recommendation,
+/// explanation, campaign alert, indicators, social-engineering techniques,
+/// and 8-category taxonomy bars).
+class ResultScreen extends StatelessWidget {
   final AnalysisResult result;
   const ResultScreen({super.key, required this.result});
 
-  @override
-  State<ResultScreen> createState() => _ResultScreenState();
-}
-
-class _ResultScreenState extends State<ResultScreen> {
-  int _viewMode = 0; // 0 = Speedometer Gauge Screen, 1 = Threat Analysis Breakdown
-  late final PageController _pageController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController(initialPage: 0);
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
   Color get _levelColor {
-    switch (widget.result.riskLevel) {
+    switch (result.riskLevel.toUpperCase()) {
       case 'CRITICAL':
         return TrustLayerColors.critical;
       case 'HIGH':
@@ -53,283 +27,54 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
-  String get _alertTitle {
-    switch (widget.result.riskLevel) {
+  Color get _levelPillBg {
+    switch (result.riskLevel.toUpperCase()) {
       case 'CRITICAL':
-        return 'CRITICAL THREAT DETECTED';
       case 'HIGH':
-        return 'HIGH RISK DETECTED';
+        return TrustLayerColors.pillScamBg;
       case 'MEDIUM':
-        return 'SUSPICIOUS ACTIVITY';
+        return TrustLayerColors.pillRiskyBg;
       default:
-        return 'NO THREAT DETECTED · SAFE';
+        return TrustLayerColors.pillSafeBg;
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: TrustLayerColors.background,
-      appBar: AppBar(
-        backgroundColor: TrustLayerColors.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Colors.white70),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          _viewMode == 0 ? 'Risk Result' : 'Threat Analysis',
-          style: GoogleFonts.inter(
-            color: TrustLayerColors.textPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-            letterSpacing: 0.5,
-          ),
-        ),
-        actions: [
-          // Toggle between Gauge & Full Breakdown
-          TextButton.icon(
-            onPressed: () {
-              final nextPage = _viewMode == 0 ? 1 : 0;
-              _pageController.animateToPage(
-                nextPage,
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeInOut,
-              );
-            },
-            icon: Icon(
-              _viewMode == 0 ? Icons.analytics_outlined : Icons.speed_rounded,
-              size: 16,
-              color: TrustLayerColors.primary,
-            ),
-            label: Text(
-              _viewMode == 0 ? 'Breakdown' : 'Gauge',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: TrustLayerColors.primary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SafeArea(
-        child: PageView(
-          controller: _pageController,
-          onPageChanged: (index) {
-            setState(() {
-              _viewMode = index;
-            });
-          },
-          children: [
-            _buildRiskResultScreen(),
-            _buildThreatAnalysisBreakdown(),
-          ],
-        ),
-      ),
-    );
+  Color get _heroCardBg {
+    switch (result.riskLevel.toUpperCase()) {
+      case 'CRITICAL':
+      case 'HIGH':
+        return TrustLayerColors.sand;
+      case 'MEDIUM':
+        return TrustLayerColors.butter;
+      default:
+        return TrustLayerColors.sage;
+    }
   }
 
-  /// Screen 4: Risk Result Screen
-  Widget _buildRiskResultScreen() {
-    final score = widget.result.riskScore;
-
-    return SingleChildScrollView(
-      key: const ValueKey('gauge_screen'),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Column(
-        children: [
-          const SizedBox(height: 12),
-
-          // 3D Speedometer Radial Gauge Dial
-          Center(
-            child: SizedBox(
-              width: 250,
-              height: 250,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CustomPaint(
-                    size: const Size(250, 250),
-                    painter: _SpeedometerGaugePainter(
-                      score: score,
-                      accentColor: _levelColor,
-                    ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '$score',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 52,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: -1,
-                          shadows: [
-                            Shadow(
-                              color: _levelColor.withOpacity(0.6),
-                              blurRadius: 16,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        'RISK SCORE',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 2.0,
-                          color: _levelColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 36),
-
-          // Alert Badge Icon & Headline
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _levelColor.withOpacity(0.14),
-              border: Border.all(color: _levelColor.withOpacity(0.4), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: _levelColor.withOpacity(0.2),
-                  blurRadius: 18,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Icon(
-              widget.result.riskLevel == 'LOW'
-                  ? Icons.verified_user_rounded
-                  : Icons.priority_high_rounded,
-              color: _levelColor,
-              size: 26,
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          Text(
-            _alertTitle,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
-              color: _levelColor,
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // Description subtext
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              widget.result.threatType.isNotEmpty
-                  ? 'TrustLayer AI identified signature: ${widget.result.threatType}.'
-                  : 'TrustLayer AI is actively scanning, detecting anomalies for financial fraud.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                height: 1.45,
-                color: TrustLayerColors.textSecondary,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 36),
-
-          // Action CTA "Continue / Threat Analysis" Button
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: () {
-                _pageController.animateToPage(
-                  1,
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeInOut,
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0C172B),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(26),
-                  side: BorderSide(
-                    color: TrustLayerColors.primary.withOpacity(0.6),
-                    width: 1.4,
-                  ),
-                ),
-                shadowColor: TrustLayerColors.primary.withOpacity(0.3),
-              ),
-              child: Text(
-                'Continue',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  Color _severityColor(String sev) {
+    switch (sev.toUpperCase()) {
+      case 'CRITICAL':
+        return TrustLayerColors.critical;
+      case 'HIGH':
+        return TrustLayerColors.high;
+      case 'MEDIUM':
+        return TrustLayerColors.medium;
+      default:
+        return TrustLayerColors.low;
+    }
   }
 
-  /// Screen 5: Threat Analysis Breakdown
-  Widget _buildThreatAnalysisBreakdown() {
-    return ListView(
-      key: const ValueKey('analysis_screen'),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      children: [
-        // 1. Social-Engineering Techniques Card
-        _buildSocialEngineeringCard(),
-
-        const SizedBox(height: 16),
-
-        // 2. AI Explanation Card
-        _buildExplanationCard(),
-
-        const SizedBox(height: 16),
-
-        // 3. Safety Recommendation Card (with glowing alert border)
-        _buildRecommendationCard(),
-
-        const SizedBox(height: 16),
-
-        // 4. Forensics & Indicators List
-        if (widget.result.indicators.isNotEmpty) _buildIndicatorsCard(),
-
-        const SizedBox(height: 24),
-      ],
-    );
+  Color _severityBg(String sev) {
+    switch (sev.toUpperCase()) {
+      case 'CRITICAL':
+      case 'HIGH':
+        return TrustLayerColors.pillScamBg;
+      case 'MEDIUM':
+        return TrustLayerColors.pillRiskyBg;
+      default:
+        return TrustLayerColors.pillSafeBg;
+    }
   }
-
-  static const List<String> _canonicalSeCategories = [
-    'Authority',
-    'Urgency',
-    'Fear',
-    'Reward',
-    'Scarcity',
-    'Trust Impersonation',
-    'Financial Pressure',
-    'Credential Harvesting',
-  ];
 
   int _intensityToPct(String intensity) {
     switch (intensity.toUpperCase()) {
@@ -344,38 +89,595 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
-  Widget _buildSocialEngineeringCard() {
-    // FR-05: Rate all 8 SE taxonomy categories across NONE | LOW | MEDIUM | HIGH
-    // without fabricating non-zero bars on benign messages.
-    final Map<String, String> byName = {
-      for (final name in _canonicalSeCategories) name: 'NONE',
-    };
+  @override
+  Widget build(BuildContext context) {
+    final score = result.riskScore.clamp(0, 100);
+    final levelUpper = result.riskLevel.toUpperCase();
 
-    if (widget.result.seTaxonomy.isNotEmpty) {
-      for (final item in widget.result.seTaxonomy) {
-        byName[item.technique] = item.intensity.toUpperCase();
-      }
-    } else if (widget.result.seTechniques.isNotEmpty) {
-      for (final item in widget.result.seTechniques) {
-        byName[item.technique] = item.intensity.toUpperCase();
-      }
-    }
-
-    final techniques = byName.entries
-        .map((e) => {
-              'name': e.key,
-              'intensity': e.value,
-              'pct': _intensityToPct(e.value),
-            })
-        .toList();
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: TrustLayerColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: TrustLayerColors.surfaceBorder),
+    return Scaffold(
+      backgroundColor: TrustLayerColors.background,
+      appBar: AppBar(
+        backgroundColor: TrustLayerColors.headerWarm,
+        elevation: 0,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Center(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: () => Navigator.maybePop(context),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: TrustLayerColors.headerButton,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.arrow_back_rounded,
+                  size: 20,
+                  color: TrustLayerColors.textPrimary,
+                ),
+              ),
+            ),
+          ),
+        ),
+        title: Text(
+          'Analysis Report',
+          style: GoogleFonts.plusJakartaSans(
+            color: TrustLayerColors.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 17,
+          ),
+        ),
+        centerTitle: true,
       ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
+          children: [
+            // Warm Cream Top Header Extension with Verdict Card
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+              decoration: const BoxDecoration(
+                color: TrustLayerColors.headerWarm,
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(32),
+                  top: Radius.circular(24),
+                ),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _heroCardBg,
+                  borderRadius: BorderRadius.circular(26),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        // Calibrated Circular Score Gauge
+                        SizedBox(
+                          width: 108,
+                          height: 108,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(
+                                width: 96,
+                                height: 96,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.88),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              SizedBox(
+                                width: 98,
+                                height: 98,
+                                child: CircularProgressIndicator(
+                                  value: score / 100.0,
+                                  strokeWidth: 8,
+                                  backgroundColor: Colors.white.withOpacity(0.6),
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(_levelColor),
+                                ),
+                              ),
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${result.riskScore}',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 30,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.0,
+                                      color: TrustLayerColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '/ 100',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: TrustLayerColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _levelPillBg,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '$levelUpper RISK',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: _levelColor,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              if (result.threatType.isNotEmpty)
+                                Text(
+                                  result.threatType,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: TrustLayerColors.textPrimary,
+                                  ),
+                                ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Channel: ${result.inputType.toUpperCase()}',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: TrustLayerColors.textPrimary.withOpacity(0.65),
+                                ),
+                              ),
+                              if (result.latencyMs != null) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  'Analyzed in ${result.latencyMs!.toStringAsFixed(1)} ms',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                    color:
+                                        TrustLayerColors.textPrimary.withOpacity(0.6),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Conditional Coordinated Campaign Alert Banner
+            if (result.campaignFlagged) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: TrustLayerColors.pillScamBg,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.campaign_rounded,
+                      color: TrustLayerColors.critical,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Part of a possible coordinated campaign detected',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: TrustLayerColors.critical,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+
+            // Safety Recommendation Card (Periwinkle Pastel Highlight)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: TrustLayerColors.periwinkle,
+                borderRadius: BorderRadius.circular(26),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.shield_outlined,
+                      size: 20,
+                      color: TrustLayerColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Recommended Action',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: TrustLayerColors.textPrimary.withOpacity(0.65),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          result.recommendation.isNotEmpty
+                              ? result.recommendation
+                              : 'Proceed with caution and verify the sender independently.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            height: 1.4,
+                            fontWeight: FontWeight.w700,
+                            color: TrustLayerColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // AI Explanation Card
+            _whiteCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: TrustLayerColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.auto_awesome_outlined,
+                          size: 18,
+                          color: TrustLayerColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'AI Forensic Summary',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: TrustLayerColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    result.explanation.isNotEmpty
+                        ? result.explanation
+                        : 'Fused multi-engine inspection completed.',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13.5,
+                      height: 1.55,
+                      color: TrustLayerColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Multi-Channel Scores (when present)
+            if (result.mlScore != null ||
+                result.ruleScore != null ||
+                result.intelScore != null ||
+                result.urlScore != null) ...[
+              const SizedBox(height: 14),
+              _buildChannelBreakdownCard(),
+            ],
+
+            // Conditional Detection Indicators Section
+            if (result.indicators.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _whiteCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Indicators',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: TrustLayerColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...result.indicators.map((ind) {
+                      final sevUpper = ind.severity.toUpperCase();
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: TrustLayerColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    ind.title,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: TrustLayerColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _severityBg(sevUpper),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Text(
+                                    sevUpper,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: _severityColor(sevUpper),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (ind.detail != null && ind.detail!.isNotEmpty) ...[
+                              const SizedBox(height: 5),
+                              Text(
+                                ind.detail!,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  color: TrustLayerColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+
+            // Conditional Social Engineering Techniques Section
+            if (result.seTechniques.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _whiteCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Social Engineering Techniques',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: TrustLayerColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...result.seTechniques.map((t) {
+                      final intensityUpper = t.intensity.toUpperCase();
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: TrustLayerColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    t.technique,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: TrustLayerColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _severityBg(intensityUpper),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Text(
+                                    intensityUpper,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: _severityColor(intensityUpper),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (t.evidence != null && t.evidence!.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                '"${t.evidence}"',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                  color: TrustLayerColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+
+            // 8-Category SE Taxonomy Bars (FR-05 when returned by backend)
+            if (result.seTaxonomy.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _buildTaxonomyCard(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChannelBreakdownCard() {
+    final channels = <Map<String, dynamic>>[
+      if (result.mlScore != null)
+        {
+          'label': 'Neural Classifier',
+          'pct': (result.mlScore! <= 1.0 ? result.mlScore! * 100 : result.mlScore!)
+              .round()
+              .clamp(0, 100),
+        },
+      if (result.ruleScore != null)
+        {
+          'label': 'Heuristic Rules',
+          'pct': result.ruleScore!.round().clamp(0, 100),
+        },
+      if (result.intelScore != null)
+        {
+          'label': 'Threat Intel (IOC)',
+          'pct': result.intelScore!.round().clamp(0, 100),
+        },
+      if (result.urlScore != null)
+        {
+          'label': 'URL Forensics',
+          'pct': result.urlScore!.round().clamp(0, 100),
+        },
+    ];
+
+    return _whiteCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Engine Confidence',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: TrustLayerColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...channels.map((ch) {
+            final pct = ch['pct'] as int;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        ch['label'] as String,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: TrustLayerColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        '$pct%',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: TrustLayerColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: pct / 100.0,
+                      minHeight: 6,
+                      backgroundColor: TrustLayerColors.surfaceElevated,
+                      valueColor: AlwaysStoppedAnimation<Color>(_levelColor),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaxonomyCard() {
+    return _whiteCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -383,81 +685,75 @@ class _ResultScreenState extends State<ResultScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Social-Engineering Techniques',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
+                'Manipulation Taxonomy',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: TrustLayerColors.textPrimary,
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: TrustLayerColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
-                  '8-CATEGORY TAXONOMY',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.bold,
-                    color: TrustLayerColors.primary,
+                  '8 Vectors',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: TrustLayerColors.textSecondary,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          ...techniques.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final t = entry.value;
-            final intensity = t['intensity'] as String;
-            final pct = t['pct'] as int;
-
-            Color barColor = const Color(0xFF475569);
-            if (intensity == 'HIGH') {
-              barColor = const Color(0xFFEF4444);
-            } else if (intensity == 'MEDIUM') {
-              barColor = const Color(0xFFF59E0B);
-            } else if (intensity == 'LOW') {
-              barColor = idx.isEven ? const Color(0xFF3B82F6) : const Color(0xFF06B6D4);
-            }
-
+          const SizedBox(height: 14),
+          ...result.seTaxonomy.map((item) {
+            final intensity = item.intensity.toUpperCase();
+            final pct = _intensityToPct(intensity);
+            final barColor = intensity == 'HIGH'
+                ? TrustLayerColors.critical
+                : intensity == 'MEDIUM'
+                    ? TrustLayerColors.medium
+                    : intensity == 'LOW'
+                        ? TrustLayerColors.accent
+                        : TrustLayerColors.surfaceBorder;
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 10),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Text(
-                          t['name'] as String,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: TrustLayerColors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      Text(
+                        item.technique,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: TrustLayerColors.textPrimary,
                         ),
                       ),
                       Text(
-                        '$intensity · $pct%',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: intensity == 'NONE' ? TrustLayerColors.textMuted : Colors.white,
+                        intensity,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: intensity == 'NONE'
+                              ? TrustLayerColors.textMuted
+                              : barColor,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 5),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(6),
                     child: LinearProgressIndicator(
                       value: pct / 100.0,
                       minHeight: 5.5,
-                      backgroundColor: const Color(0xFF0B1322),
+                      backgroundColor: TrustLayerColors.surfaceElevated,
                       valueColor: AlwaysStoppedAnimation<Color>(barColor),
                     ),
                   ),
@@ -470,245 +766,21 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  Widget _buildExplanationCard() {
+  Widget _whiteCard({required Widget child}) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: TrustLayerColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: TrustLayerColors.surfaceBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.psychology_outlined, size: 18, color: TrustLayerColors.primary),
-              const SizedBox(width: 8),
-              Text(
-                'AI Explanation',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: TrustLayerColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            widget.result.explanation.isNotEmpty
-                ? widget.result.explanation
-                : 'Highly deceptive message using artificial urgency and impersonation to harvest credentials for financial fraud.',
-            style: GoogleFonts.inter(
-              fontSize: 12.5,
-              height: 1.5,
-              color: TrustLayerColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecommendationCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF140D0E),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF97316).withOpacity(0.6), width: 1.2),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFF97316).withOpacity(0.1),
+            color: const Color(0xFF16161A).withOpacity(0.04),
             blurRadius: 18,
-            spreadRadius: 1,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.shield_outlined, size: 18, color: Color(0xFFF97316)),
-              const SizedBox(width: 8),
-              Text(
-                'Safety Recommendation',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFF97316),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            widget.result.recommendation.isNotEmpty
-                ? widget.result.recommendation
-                : 'Do NOT click. This is a scam. Block the sender and delete the message.',
-            style: GoogleFonts.inter(
-              fontSize: 12.5,
-              height: 1.45,
-              color: Colors.white.withOpacity(0.9),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
+      child: child,
     );
   }
-
-  Widget _buildIndicatorsCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: TrustLayerColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: TrustLayerColors.surfaceBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Forensic Telemetry Indicators',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: TrustLayerColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...widget.result.indicators.map((ind) {
-            Color sevColor = TrustLayerColors.low;
-            if (ind.severity == 'CRITICAL') sevColor = TrustLayerColors.critical;
-            if (ind.severity == 'HIGH') sevColor = TrustLayerColors.high;
-            if (ind.severity == 'MEDIUM') sevColor = TrustLayerColors.medium;
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: sevColor),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          ind.title,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (ind.detail != null)
-                          Text(
-                            ind.detail!,
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: TrustLayerColors.textMuted,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
-/// Custom painter for the 3D Speedometer Gauge Dial
-class _SpeedometerGaugePainter extends CustomPainter {
-  _SpeedometerGaugePainter({
-    required this.score,
-    required this.accentColor,
-  });
-
-  final int score;
-  final Color accentColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 10;
-
-    // 1. Outer Dark Chrome Bezel Ring
-    final bezelPaint = Paint()
-      ..color = const Color(0xFF1E293B)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5;
-    canvas.drawCircle(center, radius, bezelPaint);
-
-    // 2. Calibrated Tick Marks
-    final totalTicks = 36;
-    for (int i = 0; i <= totalTicks; i++) {
-      // Gauge covers 240 degrees (from 150 deg to 390 deg)
-      final angle = (150 + (i / totalTicks) * 240) * (math.pi / 180);
-      final isMajor = i % 6 == 0;
-      final tickLen = isMajor ? 8.0 : 4.0;
-      final p1 = Offset(
-        center.dx + (radius - 4) * math.cos(angle),
-        center.dy + (radius - 4) * math.sin(angle),
-      );
-      final p2 = Offset(
-        center.dx + (radius - 4 - tickLen) * math.cos(angle),
-        center.dy + (radius - 4 - tickLen) * math.sin(angle),
-      );
-
-      final tickPaint = Paint()
-        ..color = isMajor ? Colors.white70 : Colors.white24
-        ..strokeWidth = isMajor ? 1.5 : 1.0;
-      canvas.drawLine(p1, p2, tickPaint);
-    }
-
-    // 3. Track Arc Background
-    final trackRect = Rect.fromCircle(center: center, radius: radius - 18);
-    final startAngle = 150 * (math.pi / 180);
-    final sweepAngle = 240 * (math.pi / 180);
-
-    final trackPaint = Paint()
-      ..color = Colors.white.withOpacity(0.08)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(trackRect, startAngle, sweepAngle, false, trackPaint);
-
-    // 4. Active Glowing Risk Score Arc
-    final activeSweep = sweepAngle * (score / 100.0).clamp(0.02, 1.0);
-
-    // Glow shadow
-    final glowPaint = Paint()
-      ..color = accentColor.withOpacity(0.4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 16
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawArc(trackRect, startAngle, activeSweep, false, glowPaint);
-
-    // Sharp colored stroke
-    final activePaint = Paint()
-      ..color = accentColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(trackRect, startAngle, activeSweep, false, activePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SpeedometerGaugePainter old) =>
-      old.score != score || old.accentColor != accentColor;
 }

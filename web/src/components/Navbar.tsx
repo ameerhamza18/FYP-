@@ -12,7 +12,7 @@ import PasswordChangeModal from './PasswordChangeModal';
 
 const MARKETING_LINKS = [
   { href: '/#features', label: 'Capabilities' },
-  { href: '/#pipeline', label: '3D Pipeline' },
+  { href: '/#pipeline', label: 'How It Works' },
   { href: '/#security', label: 'Assurance' },
 ];
 
@@ -23,7 +23,6 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
-  // Close the mobile panel whenever the route changes.
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
@@ -35,101 +34,102 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-ink-border bg-ink/85 backdrop-blur-2xl transition-all">
+    <header className="sticky top-0 z-50 border-b border-border-default/80 bg-background/88 backdrop-blur-xl transition-all">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-5 sm:px-6">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-5">
           <Link href="/" className="shrink-0" aria-label="TrustLayer home">
-            <Logo onInk />
+            <Logo />
           </Link>
 
-          {/* Sub-header SOC Beacon */}
-          <div className="hidden xl:flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 font-mono text-[10px] text-slate-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 tl-beacon" />
-            <span className="font-semibold text-slate-300">CORE SENSORS: ONLINE</span>
-            <span className="text-slate-500">· 99.98%</span>
+          <div className="hidden xl:flex items-center gap-2 rounded-full border border-border-default bg-surface px-3 py-1 text-[11px] font-medium text-muted shadow-2xs">
+            <span className="h-2 w-2 rounded-full bg-[#158067] tl-beacon" />
+            <span className="font-semibold text-foreground">Available & Armed</span>
+            <span>· 4 Engines</span>
           </div>
         </div>
 
-        <div className="hidden items-center gap-1.5 lg:flex font-mono text-xs">
+        {/* Center pill dock */}
+        <div className="hidden items-center gap-1 rounded-full border border-border-default bg-surface p-1 shadow-2xs lg:flex text-xs font-medium">
           {MARKETING_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-lg px-3 py-2 text-ink-muted transition-all hover:bg-white/[0.05] hover:text-ink-foreground"
+              className="rounded-full px-3.5 py-1.5 text-muted transition-all hover:bg-surface-muted hover:text-foreground"
             >
               {link.label}
             </Link>
           ))}
           <Link
             href="/analyze"
-            className={`rounded-lg px-3 py-2 transition-all ${
+            className={`rounded-full px-3.5 py-1.5 transition-all ${
               pathname === '/analyze'
-                ? 'bg-brand/15 text-brand-cyan border border-brand/30'
-                : 'text-ink-muted hover:bg-white/[0.05] hover:text-ink-foreground'
+                ? 'bg-brand text-brand-foreground font-semibold shadow-2xs'
+                : 'text-muted hover:bg-surface-muted hover:text-foreground'
             }`}
           >
-            Threat Analyzer
+            Shield AI Scanner
           </Link>
           {isAdmin && (
             <Link
               href="/dashboard"
-              className={`rounded-lg px-3 py-2 transition-all ${
+              className={`rounded-full px-3.5 py-1.5 transition-all ${
                 pathname === '/dashboard'
-                  ? 'bg-brand/15 text-brand-cyan border border-brand/30'
-                  : 'text-ink-muted hover:bg-white/[0.05] hover:text-ink-foreground'
+                  ? 'bg-brand text-brand-foreground font-semibold shadow-2xs'
+                  : 'text-muted hover:bg-surface-muted hover:text-foreground'
               }`}
             >
-              SOC Command
+              SOC Dashboard
             </Link>
           )}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <ThemeToggle onInk />
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <ThemeToggle />
 
           {ready && user ? (
-            <div className="hidden items-center gap-2 sm:gap-3 sm:flex font-mono">
+            <div className="hidden items-center gap-2 sm:flex">
               <NotificationTray />
 
-              <span className="max-w-[150px] truncate text-[11px] text-ink-muted" title={user.email}>
-                {user.email}
+              <div className="flex items-center gap-2 rounded-full border border-border-default bg-surface pl-2.5 pr-1.5 py-1 shadow-2xs">
+                <span className="max-w-[140px] truncate text-xs font-medium text-foreground" title={user.email}>
+                  {user.email}
+                </span>
                 {isAdmin && (
-                  <span className="ml-1.5 rounded bg-brand/20 border border-brand/40 px-1.5 py-0.5 text-[9px] font-bold uppercase text-brand-cyan">
-                    SOC_ADMIN
+                  <span className="rounded-full bg-[#A3F750] px-2 py-0.5 text-[10px] font-bold text-[#143300]">
+                    SOC
                   </span>
                 )}
-              </span>
-
-              <button
-                type="button"
-                onClick={() => setPasswordModalOpen(true)}
-                className="rounded-xl border border-ink-border bg-white/[0.04] px-2.5 py-1.5 text-xs text-ink-muted transition-all hover:bg-white/[0.08] hover:text-ink-foreground"
-                title="Change account password"
-              >
-                Key
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalOpen(true)}
+                  className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-medium text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                  title="Change account password"
+                >
+                  Password
+                </button>
+              </div>
 
               <button
                 type="button"
                 onClick={handleLogout}
-                className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-ink-foreground transition-all hover:bg-white/[0.08]"
+                className="rounded-full bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground transition-all hover:bg-brand-hover"
               >
                 Sign out
               </button>
             </div>
           ) : (
-            <div className="hidden items-center gap-3 sm:flex">
+            <div className="hidden items-center gap-2.5 sm:flex">
               <Link
                 href="/login"
-                className="rounded-lg px-3 py-2 text-xs font-mono font-medium text-ink-muted transition-colors hover:text-ink-foreground"
+                className="rounded-full px-3.5 py-2 text-xs font-semibold text-muted transition-colors hover:text-foreground"
               >
                 Sign in
               </Link>
               <Link
                 href="/analyze"
-                className="rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground shadow-[var(--shadow-cyber)] transition-all hover:bg-brand-hover hover:shadow-[var(--shadow-lift)]"
+                className="rounded-full bg-brand px-4.5 py-2 text-xs font-semibold text-brand-foreground shadow-[var(--shadow-cyber)] transition-all hover:bg-brand-hover"
               >
-                Launch Console
+                Get Started
               </Link>
             </div>
           )}
@@ -139,7 +139,7 @@ export default function Navbar() {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label="Toggle navigation menu"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-ink-border bg-white/5 text-ink-foreground sm:hidden"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-default bg-surface text-foreground sm:hidden"
           >
             <svg
               width="18"
@@ -158,41 +158,48 @@ export default function Navbar() {
       </nav>
 
       {open && (
-        <div className="border-t border-ink-border bg-ink px-5 pb-5 pt-3 sm:hidden">
-          <div className="flex flex-col gap-1 font-mono text-xs">
+        <div className="border-t border-border-default bg-surface px-5 pb-5 pt-3 sm:hidden shadow-lg">
+          <div className="flex flex-col gap-1 text-sm font-medium">
             {MARKETING_LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="rounded-lg px-3 py-2.5 text-ink-muted hover:bg-white/5 hover:text-ink-foreground"
+                className="rounded-2xl px-3.5 py-2.5 text-muted hover:bg-surface-muted hover:text-foreground"
               >
                 {link.label}
               </Link>
             ))}
             <Link
               href="/analyze"
-              className="rounded-lg px-3 py-2.5 text-ink-muted hover:bg-white/5 hover:text-ink-foreground"
+              className="rounded-2xl px-3.5 py-2.5 text-muted hover:bg-surface-muted hover:text-foreground"
             >
-              Threat Analyzer
+              Shield AI Scanner
             </Link>
             {isAdmin && (
               <Link
                 href="/dashboard"
-                className="rounded-lg px-3 py-2.5 text-ink-muted hover:bg-white/5 hover:text-ink-foreground"
+                className="rounded-2xl px-3.5 py-2.5 text-muted hover:bg-surface-muted hover:text-foreground"
               >
-                SOC Command
+                SOC Dashboard
               </Link>
             )}
           </div>
 
-          <div className="mt-4 border-t border-ink-border pt-4">
+          <div className="mt-4 border-t border-border-default pt-4">
             {ready && user ? (
-              <div className="flex flex-col gap-3 font-mono text-xs">
-                <span className="truncate text-ink-muted">{user.email}</span>
+              <div className="flex flex-col gap-3 text-xs">
+                <span className="truncate font-medium text-muted">{user.email}</span>
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalOpen(true)}
+                  className="rounded-full border border-border-default bg-surface-muted px-4 py-2.5 font-semibold text-foreground"
+                >
+                  Change Password
+                </button>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="rounded-xl border border-ink-border bg-white/5 px-4 py-2.5 font-semibold text-ink-foreground"
+                  className="rounded-full bg-brand px-4 py-2.5 font-semibold text-brand-foreground"
                 >
                   Sign out
                 </button>
@@ -201,15 +208,15 @@ export default function Navbar() {
               <div className="flex flex-col gap-2">
                 <Link
                   href="/login"
-                  className="rounded-xl border border-ink-border px-4 py-2.5 text-center text-sm font-semibold text-ink-foreground"
+                  className="rounded-full border border-border-default px-4 py-2.5 text-center text-sm font-semibold text-foreground"
                 >
                   Sign in
                 </Link>
                 <Link
                   href="/analyze"
-                  className="rounded-xl bg-brand px-4 py-2.5 text-center text-sm font-semibold text-brand-foreground"
+                  className="rounded-full bg-brand px-4 py-2.5 text-center text-sm font-semibold text-brand-foreground"
                 >
-                  Launch Console
+                  Get Started
                 </Link>
               </div>
             )}
@@ -223,5 +230,3 @@ export default function Navbar() {
     </header>
   );
 }
-
-

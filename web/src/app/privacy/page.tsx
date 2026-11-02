@@ -2,27 +2,33 @@
 
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { CARD } from '@/components/ui';
 
 export default function PrivacyPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-background-subtle">
-        <div className="mx-auto max-w-3xl px-5 py-16 lg:px-6 lg:py-20">
+      <main className="min-h-screen bg-background">
+        <div className="mx-auto max-w-4xl px-5 py-16 lg:px-6 lg:py-20">
           <header className="mb-10">
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand-soft px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand mb-6">
-              Legal
+            <div className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-foreground shadow-2xs mb-5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#8B3DFF]" />
+              Legal &amp; Governance
             </div>
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">Privacy Policy</h1>
+            <h1 className="tl-serif text-4xl font-normal tracking-tight text-foreground sm:text-5xl">
+              Privacy Policy
+            </h1>
             <p className="mt-3 text-sm text-muted">
-              Effective Date: <strong className="text-foreground">1 September 2026</strong> · Last updated: <strong className="text-foreground">16 September 2026</strong>
+              Effective Date: <strong className="text-foreground">1 September 2026</strong> · Last updated:{' '}
+              <strong className="text-foreground">16 September 2026</strong>
             </p>
           </header>
 
-          <div className="prose prose-slate max-w-none space-y-8 text-sm leading-relaxed text-foreground">
-
+          <div className={`${CARD} space-y-8 p-6 sm:p-10 text-sm leading-relaxed text-foreground`}>
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-3">1. What is TrustLayer?</h2>
+              <h2 className="tl-serif text-2xl font-normal text-foreground mb-2.5">
+                1. What is TrustLayer?
+              </h2>
               <p className="text-muted">
                 TrustLayer is an AI-powered scam and fraud interception platform. It analyses text messages,
                 URLs, and screenshots submitted by users and returns an explainable risk verdict. TrustLayer
@@ -31,14 +37,16 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-3">2. Data We Collect</h2>
-              <div className="overflow-x-auto rounded-xl border border-border-default">
+              <h2 className="tl-serif text-2xl font-normal text-foreground mb-3">
+                2. Data We Collect
+              </h2>
+              <div className="overflow-x-auto rounded-2xl border border-border-default">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-surface-muted text-xs uppercase tracking-wider text-muted">
+                  <thead className="bg-surface-muted text-xs font-semibold text-muted">
                     <tr>
-                      <th className="px-5 py-3 font-semibold">Data Type</th>
-                      <th className="px-5 py-3 font-semibold">Purpose</th>
-                      <th className="px-5 py-3 font-semibold">Retention</th>
+                      <th className="px-5 py-3.5">Data Type</th>
+                      <th className="px-5 py-3.5">Purpose</th>
+                      <th className="px-5 py-3.5">Retention</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-default">
@@ -52,7 +60,7 @@ export default function PrivacyPage() {
                       ['IP address & user-agent', 'Security audit logging, rate limiting', '90 days'],
                     ].map(([type, purpose, retention]) => (
                       <tr key={type} className="hover:bg-surface-muted/50">
-                        <td className="px-5 py-3 font-medium text-foreground">{type}</td>
+                        <td className="px-5 py-3 font-semibold text-foreground">{type}</td>
                         <td className="px-5 py-3 text-muted">{purpose}</td>
                         <td className="px-5 py-3 text-muted">{retention}</td>
                       </tr>
@@ -63,8 +71,10 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-3">3. What We Do NOT Do</h2>
-              <ul className="mt-2 space-y-2 text-muted">
+              <h2 className="tl-serif text-2xl font-normal text-foreground mb-2.5">
+                3. What We Do NOT Do
+              </h2>
+              <ul className="mt-2 space-y-2.5 text-muted">
                 {[
                   'We do NOT sell, rent, or share your data with third parties.',
                   'We do NOT store raw screenshot images — only the text extracted from them (OCR) is held in memory during processing.',
@@ -72,8 +82,10 @@ export default function PrivacyPage() {
                   'We do NOT send submitted URLs to external services — URL analysis is fully static and offline.',
                   'We do NOT send any data to the LLM unless you have opted in and an API key is configured.',
                 ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="mt-0.5 text-brand font-bold">✓</span>
+                  <li key={item} className="flex items-start gap-2.5">
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#DFF4EC] text-[11px] font-bold text-[#158067]">
+                      ✓
+                    </span>
                     <span>{item}</span>
                   </li>
                 ))}
@@ -81,17 +93,32 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-3">4. Your Rights</h2>
+              <h2 className="tl-serif text-2xl font-normal text-foreground mb-2.5">
+                4. Your Rights
+              </h2>
               <p className="text-muted mb-3">You have the right to:</p>
               <ul className="space-y-2 text-muted">
-                <li><strong className="text-foreground">Access</strong> — View all analyses stored against your account via the app history.</li>
-                <li><strong className="text-foreground">Deletion</strong> — Permanently delete your account and all associated data via <em>Menu → Delete Account</em> in the mobile app, or by contacting us at <a href="mailto:privacy@trustlayer.app" className="text-brand underline">privacy@trustlayer.app</a>.</li>
-                <li><strong className="text-foreground">Portability</strong> — Request an export of your analysis history by contacting us.</li>
+                <li>
+                  <strong className="text-foreground">Access</strong> — View all analyses stored against your account via the app history.
+                </li>
+                <li>
+                  <strong className="text-foreground">Deletion</strong> — Permanently delete your account and all associated data via{' '}
+                  <em>Menu → Delete Account</em> in the mobile app, or by contacting us at{' '}
+                  <a href="mailto:privacy@trustlayer.app" className="font-semibold text-[#6D28D9] underline">
+                    privacy@trustlayer.app
+                  </a>
+                  .
+                </li>
+                <li>
+                  <strong className="text-foreground">Portability</strong> — Request an export of your analysis history by contacting us.
+                </li>
               </ul>
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-3">5. Security</h2>
+              <h2 className="tl-serif text-2xl font-normal text-foreground mb-2.5">
+                5. Security
+              </h2>
               <p className="text-muted">
                 TrustLayer implements industry-grade security controls: JWT authentication, bcrypt password
                 hashing (cost 12), sliding-window rate limiting, input validation, RBAC, object-level
@@ -101,7 +128,9 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-3">6. Cookies & Third Parties</h2>
+              <h2 className="tl-serif text-2xl font-normal text-foreground mb-2.5">
+                6. Cookies &amp; Third Parties
+              </h2>
               <p className="text-muted">
                 TrustLayer does not use analytics cookies or third-party advertising trackers. A session
                 token (JWT) is stored locally on your device to keep you signed in. No third-party
@@ -110,7 +139,9 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-3">7. Changes to This Policy</h2>
+              <h2 className="tl-serif text-2xl font-normal text-foreground mb-2.5">
+                7. Changes to This Policy
+              </h2>
               <p className="text-muted">
                 We will notify registered users of material changes via email before they take effect.
                 Continued use of TrustLayer after notification constitutes acceptance of the updated policy.
@@ -118,10 +149,12 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-3">8. Contact</h2>
+              <h2 className="tl-serif text-2xl font-normal text-foreground mb-2.5">
+                8. Contact
+              </h2>
               <p className="text-muted">
                 For privacy enquiries or data deletion requests, contact:{' '}
-                <a href="mailto:privacy@trustlayer.app" className="text-brand underline font-medium">
+                <a href="mailto:privacy@trustlayer.app" className="font-semibold text-[#6D28D9] underline">
                   privacy@trustlayer.app
                 </a>
               </p>

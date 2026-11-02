@@ -55,37 +55,37 @@ function NodeMesh({
 
   const color = useMemo(() => {
     switch (node.type) {
-      case 'malware': return '#ef4444'; // Red
-      case 'suspicious': return '#38bdf8'; // Cyan
-      case 'c2': return '#f59e0b'; // Amber
+      case 'malware':
+        return '#D9383A';
+      case 'suspicious':
+        return '#8B3DFF';
+      case 'c2':
+        return '#D9820B';
     }
   }, [node.type]);
 
   useFrame((_, delta) => {
     if (meshRef.current) {
-      meshRef.current.rotation.y += delta * (node.type === 'malware' ? 0.8 : 0.4);
+      meshRef.current.rotation.y += delta * (node.type === 'malware' ? 0.8 : 0.45);
     }
     if (beaconRef.current) {
-      const scale = 1.0 + Math.sin(Date.now() * 0.005 + Number(node.id.slice(1))) * 0.25;
+      const scale = 1.0 + Math.sin(Date.now() * 0.004 + Number(node.id.slice(1) || 1)) * 0.2;
       beaconRef.current.scale.set(scale, scale, scale);
     }
   });
 
   return (
     <group position={node.position}>
-      {/* Base Pedestal (Isometric chip look matching web.jpg) */}
       <mesh position={[0, -0.15, 0]}>
-        <boxGeometry args={[0.55, 0.1, 0.55]} />
-        <meshStandardMaterial color="#0c1527" roughness={0.4} metalness={0.8} />
+        <boxGeometry args={[0.55, 0.08, 0.55]} />
+        <meshStandardMaterial color="#E6E2D8" roughness={0.5} metalness={0.15} />
       </mesh>
 
-      {/* Glowing Border Trim */}
-      <mesh position={[0, -0.09, 0]}>
+      <mesh position={[0, -0.1, 0]}>
         <boxGeometry args={[0.57, 0.02, 0.57]} />
-        <meshBasicMaterial color={color} transparent opacity={0.6} />
+        <meshBasicMaterial color={color} transparent opacity={0.55} />
       </mesh>
 
-      {/* Floating 3D Core Node */}
       <mesh
         ref={meshRef}
         onClick={(e) => {
@@ -99,37 +99,34 @@ function NodeMesh({
         onPointerOut={() => setHovered(false)}
       >
         {node.type === 'malware' ? (
-          <octahedronGeometry args={[0.22, 0]} />
+          <octahedronGeometry args={[0.24, 0]} />
         ) : node.type === 'c2' ? (
-          <boxGeometry args={[0.25, 0.25, 0.25]} />
+          <boxGeometry args={[0.26, 0.26, 0.26]} />
         ) : (
-          <tetrahedronGeometry args={[0.22, 0]} />
+          <tetrahedronGeometry args={[0.24, 0]} />
         )}
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={hovered || isSelected ? 2.8 : 1.2}
-          roughness={0.2}
-          metalness={0.8}
+          emissiveIntensity={hovered || isSelected ? 0.8 : 0.3}
+          roughness={0.25}
+          metalness={0.4}
         />
       </mesh>
 
-      {/* Pulse Beacon Aura */}
       <mesh ref={beaconRef} position={[0, 0, 0]}>
-        <sphereGeometry args={[0.3, 16, 16]} />
-        <meshBasicMaterial color={color} transparent opacity={hovered ? 0.35 : 0.12} wireframe />
+        <sphereGeometry args={[0.32, 16, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={hovered ? 0.25 : 0.09} wireframe />
       </mesh>
 
-      {/* Floating HUD Tag */}
       {(hovered || isSelected) && (
-        <Html position={[0, 0.55, 0]} center distanceFactor={8} zIndexRange={[100, 0]}>
-          <div className="pointer-events-none whitespace-nowrap rounded border border-white/20 bg-slate-950/90 px-2 py-1 font-mono text-[10px] text-white shadow-xl backdrop-blur-md">
+        <Html position={[0, 0.58, 0]} center distanceFactor={8} zIndexRange={[100, 0]}>
+          <div className="pointer-events-none whitespace-nowrap rounded-2xl border border-border-default bg-surface/95 px-3 py-1.5 text-[11px] text-foreground shadow-lg backdrop-blur-md">
             <div className="flex items-center gap-1.5 font-bold" style={{ color }}>
               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
               {node.name}
             </div>
-            <div className="text-[9px] text-slate-400">IP: {node.ip}</div>
-            <div className="text-[9px] text-slate-400">Threat Index: {node.hits}%</div>
+            <div className="text-[10px] text-muted">{node.ip} · {node.hits}% risk</div>
           </div>
         </Html>
       )}
@@ -144,33 +141,35 @@ function VectorLines({
   nodes: VectorNode[];
   edges: VectorEdge[];
 }) {
-  const nodeMap = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes]);
+  const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
 
   const lineObjects = useMemo(() => {
-    return edges.map(edge => {
-      const fromNode = nodeMap.get(edge.from);
-      const toNode = nodeMap.get(edge.to);
-      if (!fromNode || !toNode) return null;
+    return edges
+      .map((edge) => {
+        const fromNode = nodeMap.get(edge.from);
+        const toNode = nodeMap.get(edge.to);
+        if (!fromNode || !toNode) return null;
 
-      const points = [
-        new THREE.Vector3(...fromNode.position),
-        new THREE.Vector3(...toNode.position),
-      ];
-      const curve = new THREE.CatmullRomCurve3(points);
-      const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(24));
+        const points = [
+          new THREE.Vector3(...fromNode.position),
+          new THREE.Vector3(...toNode.position),
+        ];
+        const curve = new THREE.CatmullRomCurve3(points);
+        const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(24));
 
-      let color = '#38bdf8';
-      if (edge.type === 'malware') color = '#ef4444';
-      if (edge.type === 'c2') color = '#f59e0b';
+        let color = '#8B3DFF';
+        if (edge.type === 'malware') color = '#D9383A';
+        if (edge.type === 'c2') color = '#D9820B';
 
-      const material = new THREE.LineBasicMaterial({
-        color,
-        transparent: true,
-        opacity: 0.55,
-      });
+        const material = new THREE.LineBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.45,
+        });
 
-      return new THREE.Line(geometry, material);
-    }).filter(Boolean) as THREE.Line[];
+        return new THREE.Line(geometry, material);
+      })
+      .filter(Boolean) as THREE.Line[];
   }, [edges, nodeMap]);
 
   return (
@@ -182,15 +181,13 @@ function VectorLines({
   );
 }
 
-function CyberGridFloor() {
+function StudioGridFloor() {
   return (
     <group position={[0, -0.2, 0]}>
-      {/* Isometric Grid Helper */}
-      <gridHelper args={[14, 28, '#0284c7', '#0e244d']} />
-      {/* Translucent Floor Plane */}
+      <gridHelper args={[14, 24, '#D6D1C7', '#E6E2D8']} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
         <planeGeometry args={[14, 14]} />
-        <meshBasicMaterial color="#030712" transparent opacity={0.85} />
+        <meshBasicMaterial color="#F5F3EE" transparent opacity={0.65} />
       </mesh>
     </group>
   );
@@ -230,27 +227,23 @@ export default function VectorNodesMap3D({
   };
 
   return (
-    <div className={`relative h-full w-full overflow-hidden rounded-xl border border-sky-900/40 bg-[#030712] ${className}`}>
-      {/* Top HUD Overlay matching web.jpg */}
-      <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-2">
-        <span className="flex h-5 items-center gap-1.5 rounded border border-sky-500/30 bg-sky-950/60 px-2 font-mono text-[10px] font-bold text-sky-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
-          VECTOR NODES MAP
+    <div
+      className={`relative h-full w-full overflow-hidden rounded-[22px] border border-border-default bg-gradient-to-b from-[#FAF8F4] via-[#F4F1EA] to-[#ECE8DF] dark:from-[#1B1B20] dark:to-[#141418] ${className}`}
+    >
+      <div className="pointer-events-none absolute left-4 top-4 z-10 flex items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border-default bg-surface/90 px-3 py-1 text-[11px] font-semibold text-foreground shadow-2xs backdrop-blur-md">
+          <span className="h-2 w-2 rounded-full bg-[#8B3DFF] tl-beacon" />
+          Correlation Topology · {resolvedNodes.length} Nodes
         </span>
-        <span className="font-mono text-[9px] text-slate-500">[CORRELATION ACTIVE: {resolvedNodes.length} NODES]</span>
-      </div>
-
-      <div className="pointer-events-none absolute right-3 top-3 z-10 flex items-center gap-2 text-slate-500">
-        <span className="font-mono text-[10px] text-sky-400/80">3D ISOMETRIC TOPOLOGY</span>
       </div>
 
       <Canvas gl={{ antialias: true, alpha: true }}>
         <PerspectiveCamera makeDefault position={[5.5, 4.8, 5.5]} fov={38} />
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[6, 10, 4]} intensity={1.2} />
-        <pointLight position={[0, 3, 0]} intensity={1.5} color="#38bdf8" distance={8} />
+        <ambientLight intensity={1.1} />
+        <directionalLight position={[6, 10, 4]} intensity={1.3} />
+        <pointLight position={[0, 3, 0]} intensity={0.9} color="#8B3DFF" distance={10} />
 
-        <CyberGridFloor />
+        <StudioGridFloor />
         <VectorLines nodes={resolvedNodes} edges={resolvedEdges} />
         {resolvedNodes.map((n) => (
           <NodeMesh
@@ -270,24 +263,23 @@ export default function VectorNodesMap3D({
         />
       </Canvas>
 
-      {/* Floating Sub-Panel overlay on bottom right (Vector Nodes Map Mini inset preview) */}
-      <div className="pointer-events-auto absolute bottom-3 right-3 z-10 w-44 rounded-lg border border-sky-900/60 bg-slate-950/85 p-2.5 backdrop-blur-md shadow-2xl">
-        <div className="flex items-center justify-between text-[9px] font-mono font-bold text-sky-400 mb-1.5">
-          <span>TARGET TOPOLOGY</span>
-          <span className="text-slate-500">x,y,z</span>
+      <div className="pointer-events-auto absolute bottom-3.5 right-3.5 z-10 w-52 rounded-2xl border border-border-default bg-surface/92 p-3 backdrop-blur-md shadow-[var(--shadow-card)]">
+        <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted mb-1.5">
+          <span>Selected Node</span>
+          <span className="text-[#8B3DFF]">Live</span>
         </div>
-        <div className="space-y-1 font-mono text-[9px] text-slate-300">
-          <div className="flex justify-between">
-            <span className="text-slate-500">Selected:</span>
-            <span className="text-white font-semibold">{activeNode?.name || 'MALWARE_CORE'}</span>
+        <div className="space-y-1 text-xs">
+          <div className="flex justify-between gap-2">
+            <span className="text-muted">Cluster:</span>
+            <span className="truncate font-semibold text-foreground">{activeNode?.name || 'CORE'}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">IP Host:</span>
-            <span className="text-sky-300">{activeNode?.ip || '19.135.1.163'}</span>
+          <div className="flex justify-between gap-2">
+            <span className="text-muted">Ref:</span>
+            <span className="truncate text-foreground">{activeNode?.ip || '—'}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">Correlation:</span>
-            <span className="text-rose-400 font-bold">{activeNode?.hits || 84}% Critical</span>
+          <div className="flex justify-between gap-2">
+            <span className="text-muted">Index:</span>
+            <span className="font-bold text-[#7C3AED]">{activeNode?.hits || 0}%</span>
           </div>
         </div>
       </div>

@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Float, Sphere, PerspectiveCamera, OrbitControls } from '@react-three/drei';
-import * as THREE from 'three';
 import type { Analysis } from '@/lib/types';
 
 interface MobileThreatPointProps {
@@ -12,19 +11,16 @@ interface MobileThreatPointProps {
   onClick: () => void;
 }
 
-function MobileThreatPoint({ position, color, size, label, onClick }: MobileThreatPointProps) {
+function MobileThreatPoint({ position, color, size, onClick }: MobileThreatPointProps) {
   return (
     <group position={position}>
-      <Sphere
-        args={[size, 16, 16]}
-        onClick={onClick}
-      >
+      <Sphere args={[size, 16, 16]} onClick={onClick}>
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.8}
-          roughness={0}
-          metalness={1}
+          emissiveIntensity={0.35}
+          roughness={0.2}
+          metalness={0.3}
         />
       </Sphere>
     </group>
@@ -35,35 +31,34 @@ export default function MobileThreatCloud({ analyses }: { analyses: Analysis[] }
   const points = useMemo(() => {
     return analyses.map((a, i) => {
       const x = (a.risk_score / 100) * 6 - 3;
-      const y = (Math.random() - 0.5) * 4;
-      const z = (i / analyses.length) * 6 - 3;
+      const y = Math.sin(i * 1.7) * 2;
+      const z = (i / Math.max(analyses.length, 1)) * 6 - 3;
 
-      let color = '#4ade80';
-      if (a.risk_level === 'medium') color = '#facc15';
-      if (a.risk_level === 'high') color = '#fb923c';
-      if (a.risk_level === 'critical') color = '#ef4444';
+      const lvl = a.risk_level.toLowerCase();
+      let color = '#158067';
+      if (lvl === 'medium') color = '#D9820B';
+      if (lvl === 'high') color = '#D95D1E';
+      if (lvl === 'critical') color = '#D9383A';
 
       return {
         position: [x, y, z] as [number, number, number],
         color,
-        size: a.risk_level === 'critical' ? 0.12 : 0.08,
+        size: lvl === 'critical' ? 0.14 : 0.1,
         label: a.threat_type,
       };
     });
   }, [analyses]);
 
   return (
-    <div className="h-[400px] w-full bg-black/60 rounded-2xl overflow-hidden border border-white/10 relative">
-      <div className="absolute top-3 left-3 z-10">
-        <span className="text-[10px] uppercase tracking-widest text-muted font-bold opacity-60">Mobile Threat View</span>
+    <div className="h-[360px] w-full bg-surface-muted rounded-[22px] overflow-hidden border border-border-default relative">
+      <div className="absolute top-3.5 left-4 z-10">
+        <span className="text-[11px] font-semibold text-muted">Mobile Threat View</span>
       </div>
       <Canvas>
         <PerspectiveCamera makeDefault position={[0, 0, 10]} />
         <OrbitControls enablePan={false} minDistance={4} maxDistance={15} />
-
-        <ambientLight intensity={0.3} />
-        <pointLight position={[10, 10, 10]} intensity={1} />
-
+        <ambientLight intensity={1.0} />
+        <pointLight position={[10, 10, 10]} intensity={1.2} />
         <Float speed={1} rotationIntensity={0.2} floatIntensity={0.2}>
           <group>
             {points.map((p, i) => (
@@ -75,22 +70,6 @@ export default function MobileThreatCloud({ analyses }: { analyses: Analysis[] }
             ))}
           </group>
         </Float>
-
-        <group>
-          {Array.from({ length: 50 }).map((_, i) => (
-            <Sphere
-              key={i}
-              args={[0.01, 8, 8]}
-              position={[
-                (Math.random() - 0.5) * 20,
-                (Math.random() - 0.5) * 20,
-                (Math.random() - 0.5) * 20
-              ]}
-            >
-              <meshBasicMaterial color="#ffffff" opacity={0.2} transparent />
-            </Sphere>
-          ))}
-        </group>
       </Canvas>
     </div>
   );

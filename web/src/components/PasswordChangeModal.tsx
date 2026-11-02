@@ -49,22 +49,25 @@ export default function PasswordChangeModal({ isOpen, onClose }: PasswordChangeM
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-      <div className="w-full max-w-md rounded-2xl border border-ink-border bg-ink p-6 shadow-2xl text-left">
-        <div className="flex items-center justify-between border-b border-ink-border pb-3">
-          <h3 className="text-base font-semibold text-ink-foreground">Change Password</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-[28px] border border-border-default bg-surface p-7 shadow-[var(--shadow-lift)] text-left">
+        <div className="flex items-center justify-between border-b border-border-default pb-4">
+          <div>
+            <h3 className="tl-serif text-2xl text-foreground">Change Password</h3>
+            <p className="text-xs text-muted mt-0.5">Update your account credentials securely</p>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-ink-muted hover:text-ink-foreground text-sm font-semibold"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-muted hover:text-foreground text-sm"
           >
             ✕
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-ink-muted mb-1">
+            <label className="block text-xs font-semibold text-foreground mb-1.5">
               Current Password
             </label>
             <input
@@ -77,7 +80,7 @@ export default function PasswordChangeModal({ isOpen, onClose }: PasswordChangeM
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink-muted mb-1">
+            <label className="block text-xs font-semibold text-foreground mb-1.5">
               New Password (8+ chars, upper, lower, digits)
             </label>
             <input
@@ -90,7 +93,7 @@ export default function PasswordChangeModal({ isOpen, onClose }: PasswordChangeM
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink-muted mb-1">
+            <label className="block text-xs font-semibold text-foreground mb-1.5">
               Confirm New Password
             </label>
             <input
@@ -102,19 +105,19 @@ export default function PasswordChangeModal({ isOpen, onClose }: PasswordChangeM
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-2.5 pt-3">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="rounded-xl border border-ink-border px-4 py-2 text-xs font-medium text-ink-muted hover:text-ink-foreground"
+              className={BTN.secondary}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
+              className={BTN.primary}
             >
               {loading ? 'Updating...' : 'Update Password'}
             </button>

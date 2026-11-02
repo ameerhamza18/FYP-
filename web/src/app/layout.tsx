@@ -22,15 +22,21 @@ export const metadata: Metadata = {
 };
 
 /**
- * Applied before first paint so the chosen theme never flashes. The storage
- * key must match THEME_STORAGE_KEY in components/ThemeToggle.tsx.
+ * Applied before first paint so the chosen theme never flashes. Defaults to the
+ * signature warm-ivory light design unless the user explicitly chose dark mode.
  */
-const THEME_BOOTSTRAP = `(function(){try{var s=localStorage.getItem('trustlayer.theme');var dark=s==='dark'||(!s&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(dark){document.documentElement.classList.add('dark');}}catch(e){}})();`;
+const THEME_BOOTSTRAP = `(function(){try{var s=localStorage.getItem('trustlayer.theme.v2');if(s==='dark'){document.documentElement.classList.add('dark');}else{document.documentElement.classList.remove('dark');}}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
       <body className="flex min-h-full flex-col bg-background text-foreground">

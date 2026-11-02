@@ -4,12 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../main.dart';
 import '../services/protection_service.dart';
 
-/// The honest answer to "am I protected?".
-///
-/// Anti-scam apps live or die on this card: interception needs permissions the
-/// user grants outside the app, and a badge claiming "Protected" while SMS
-/// access is denied is worse than no badge at all. Every row reflects a real OS
-/// state and offers exactly the action that fixes it.
+/// Real OS-verified protection status card styled in Shieldly AI crisp white sheet aesthetic.
 class ProtectionCard extends StatelessWidget {
   const ProtectionCard({
     super.key,
@@ -36,19 +31,21 @@ class ProtectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = _protected ? TrustLayerColors.low : TrustLayerColors.high;
+    final pillBg = _protected
+        ? TrustLayerColors.pillSafeBg
+        : TrustLayerColors.pillRiskyBg;
+    final pillText = _protected ? TrustLayerColors.low : TrustLayerColors.medium;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: TrustLayerColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: accent.withOpacity(0.35), width: 1.2),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: accent.withOpacity(0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF16161A).withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -58,13 +55,21 @@ class ProtectionCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.12),
+                  color: _protected
+                      ? TrustLayerColors.sage
+                      : TrustLayerColors.sand,
                   shape: BoxShape.circle,
-                  border: Border.all(color: accent.withOpacity(0.4)),
                 ),
-                child: Icon(_protected ? Icons.verified_user_rounded : Icons.gpp_maybe_rounded, color: accent, size: 20),
+                child: Icon(
+                  _protected
+                      ? Icons.verified_user_outlined
+                      : Icons.shield_outlined,
+                  color: TrustLayerColors.textPrimary,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -72,73 +77,100 @@ class ProtectionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _protected ? 'AUTONOMOUS SENSOR GUARD: ACTIVE' : 'SENSOR GUARDS STANDBY',
-                      style: GoogleFonts.inter(
+                      _protected ? 'Device Guard Active' : 'Device Sensors',
+                      style: GoogleFonts.plusJakartaSans(
                         color: TrustLayerColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13.5,
-                        letterSpacing: 0.5,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       _protected
-                          ? 'Real-time intercept stream enabled'
-                          : 'Action needed to arm hardware filters',
-                      style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 11),
+                          ? 'Real-time SMS & notification monitoring'
+                          : 'Enable OS permissions for automatic checks',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: TrustLayerColors.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
               ),
               if (busy)
                 const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: TrustLayerColors.primary),
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: TrustLayerColors.primary,
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: pillBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _protected ? '• Protected' : '• Setup',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: pillText,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11.5,
+                    ),
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: 16),
           _requirement(
             done: status.smsPermission,
-            code: 'SMS-01',
-            label: 'Read incoming SMS stream',
-            detail: 'Intercepts OTP phishing and smishing payloads.',
-            actionLabel: 'Authorize',
+            label: 'Incoming SMS Protection',
+            detail: 'Checks OTP phishing & smishing texts automatically.',
+            actionLabel: 'Allow',
             onTap: onEnableSms,
           ),
           _requirement(
             done: status.notificationAccess,
-            code: 'NOTIF-02',
-            label: 'Chat & App Notification Monitor',
-            detail: 'Protects WhatsApp, Telegram, Signal and Instagram.',
-            actionLabel: 'Enable Service',
+            label: 'Chat & App Notifications',
+            detail: 'Monitors WhatsApp, Telegram & Instagram previews.',
+            actionLabel: 'Enable',
             onTap: onEnableNotificationAccess,
           ),
           _requirement(
             done: status.notificationsEnabled,
-            code: 'ALERT-03',
-            label: 'High-Priority Threat Alerts',
-            detail: 'Delivers immediate heads-up warnings before app opens.',
-            actionLabel: 'Authorize',
+            label: 'Instant Warning Banners',
+            detail: 'Alerts you before you tap a suspicious link.',
+            actionLabel: 'Allow',
             onTap: onEnableNotifications,
           ),
           if (status.pendingInterceptions > 0) ...[
             const SizedBox(height: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: TrustLayerColors.high.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: TrustLayerColors.high.withOpacity(0.3)),
+                color: TrustLayerColors.pillRiskyBg,
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.sync_problem_rounded, color: TrustLayerColors.high, size: 16),
+                  const Icon(
+                    Icons.sync_rounded,
+                    color: TrustLayerColors.medium,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
-                  Text(
-                    '${status.pendingInterceptions} intercepted payload(s) queued for scan.',
-                    style: const TextStyle(color: TrustLayerColors.high, fontSize: 11, fontWeight: FontWeight.w600),
+                  Expanded(
+                    child: Text(
+                      '${status.pendingInterceptions} intercepted message(s) queued for scan.',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: TrustLayerColors.medium,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -151,11 +183,19 @@ class ProtectionCard extends StatelessWidget {
             children: [
               TextButton.icon(
                 onPressed: onTestAlert,
-                icon: const Icon(Icons.bolt_rounded, size: 16),
-                label: const Text('Simulate Test Threat'),
+                icon: const Icon(Icons.notifications_active_outlined, size: 16),
+                label: const Text('Test Alert'),
                 style: TextButton.styleFrom(
-                  foregroundColor: TrustLayerColors.primary,
-                  textStyle: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.bold),
+                  backgroundColor: TrustLayerColors.surfaceElevated,
+                  foregroundColor: TrustLayerColors.textPrimary,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  textStyle: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -163,9 +203,12 @@ class ProtectionCard extends StatelessWidget {
                 onPressed: onOpenBatterySettings,
                 style: TextButton.styleFrom(
                   foregroundColor: TrustLayerColors.textSecondary,
-                  textStyle: GoogleFonts.jetBrainsMono(fontSize: 10.5),
+                  textStyle: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                child: const Text('Battery Exemption →'),
+                child: const Text('Battery Settings →'),
               ),
             ],
           ),
@@ -181,99 +224,101 @@ class ProtectionCard extends StatelessWidget {
       activeColor: TrustLayerColors.primary,
       value: status.quietMode,
       onChanged: onQuietModeChanged,
-      title: Text('Suppress Flagged Alerts in OS Shade',
-          style: GoogleFonts.inter(color: TrustLayerColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+      title: Text(
+        'Hide Flagged Previews in Shade',
+        style: GoogleFonts.plusJakartaSans(
+          color: TrustLayerColors.textPrimary,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
       subtitle: Text(
-        'Neutralizes native push notification so malicious links cannot be opened accidentally.',
-        style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 11),
+        'Prevents accidental taps on scam links in the notification shade.',
+        style: GoogleFonts.plusJakartaSans(
+          color: TrustLayerColors.textSecondary,
+          fontSize: 11.5,
+        ),
       ),
     );
   }
 
   Widget _requirement({
     required bool done,
-    required String code,
     required String label,
     required String detail,
     required String actionLabel,
     required VoidCallback onTap,
   }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: TrustLayerColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(18),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            margin: const EdgeInsets.only(top: 2),
-            width: 16,
-            height: 16,
+            width: 24,
+            height: 24,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: done ? TrustLayerColors.low.withOpacity(0.2) : Colors.transparent,
-              border: Border.all(
-                color: done ? TrustLayerColors.low : TrustLayerColors.surfaceBorder,
-                width: 1.5,
-              ),
+              color: done ? TrustLayerColors.pillSafeBg : Colors.white,
             ),
-            child: done
-                ? const Center(child: Icon(Icons.check, size: 11, color: TrustLayerColors.low))
-                : null,
+            child: Icon(
+              done ? Icons.check_rounded : Icons.circle_outlined,
+              size: 14,
+              color: done ? TrustLayerColors.low : TrustLayerColors.textMuted,
+            ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      label,
-                      style: GoogleFonts.inter(
-                        color: TrustLayerColors.textPrimary,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '[$code]',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: TrustLayerColors.textMuted,
-                        fontSize: 9,
-                      ),
-                    ),
-                  ],
+                Text(
+                  label,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: TrustLayerColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                const SizedBox(height: 1),
-                Text(detail,
-                    style: TextStyle(color: TrustLayerColors.textSecondary, fontSize: 11)),
+                const SizedBox(height: 2),
+                Text(
+                  detail,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: TrustLayerColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
               ],
             ),
           ),
-          if (!done)
+          if (!done) ...[
+            const SizedBox(width: 8),
             InkWell(
               onTap: onTap,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: TrustLayerColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: TrustLayerColors.primary.withOpacity(0.4)),
+                  color: TrustLayerColors.primary,
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   actionLabel,
-                  style: GoogleFonts.jetBrainsMono(
-                    color: TrustLayerColors.primary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
+          ],
         ],
       ),
     );
   }
 }
-

@@ -7,6 +7,7 @@ interface Feature {
   title: string;
   description: string;
   metric: string;
+  tileBg: string;
   icon: ReactNode;
 }
 
@@ -17,6 +18,7 @@ const FEATURES: Feature[] = [
     description:
       'A supervised neural classifier, deterministic fraud rulesets, live IOC threat intelligence, and URL forensics are mathematically unified into a single 0–100 risk score.',
     metric: '< 240ms latency',
+    tileBg: 'bg-[#CBD4FA] text-[#1D2549]',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="12 2 2 7 12 12 22 7 12 2" />
@@ -31,6 +33,7 @@ const FEATURES: Feature[] = [
     description:
       'Zero black-box ambiguity. Every verdict highlights the exact deception indicators triggered, urgency manipulation tactics, and credential-harvesting vectors.',
     metric: 'Auditable Evidence',
+    tileBg: 'bg-[#CBE3DF] text-[#134E44]',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
@@ -44,6 +47,7 @@ const FEATURES: Feature[] = [
     description:
       'Inspect raw text payloads, suspicious URLs, or full screenshots. Visual OCR extraction executes entirely in volatile RAM — zero user data touches disk.',
     metric: 'Zero-Disk OCR',
+    tileBg: 'bg-[#EFE2D8] text-[#5C3D28]',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -57,6 +61,7 @@ const FEATURES: Feature[] = [
     description:
       'SOC teams monitor live global telemetry, 14-day attack velocity, manipulation technique distributions, cross-user campaign correlations, and immutable audit logs.',
     metric: 'Real-Time Correlated',
+    tileBg: 'bg-[#E8D68A] text-[#5A4506]',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect width="18" height="18" x="3" y="3" rx="2" />
@@ -72,11 +77,9 @@ export default function Features() {
       id="features"
       className="relative border-b border-border-default bg-background-subtle py-20 lg:py-28"
     >
-      <div className="tl-cyber-dots pointer-events-none absolute inset-0 opacity-25" />
-
       <div className="relative mx-auto max-w-7xl px-6">
         <SectionHeading
-          eyebrow="CAPABILITIES"
+          eyebrow="Capabilities"
           title="Security intelligence that proves every verdict"
           description="Most scanners flash a generic red or green light without explanation. TrustLayer provides concrete mathematical evidence and forensic lineage for every decision."
         />
@@ -85,29 +88,32 @@ export default function Features() {
           {FEATURES.map((feature) => (
             <article
               key={feature.title}
-              className="tl-reticle-card group relative flex flex-col justify-between rounded-2xl border border-white/10 bg-surface/90 p-6 backdrop-blur-xl shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-brand/40 hover:shadow-[var(--shadow-lift)]"
+              className="group relative flex flex-col justify-between rounded-[26px] border border-border-default bg-surface p-6 shadow-[var(--shadow-card)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lift)]"
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-brand/25 bg-brand-soft text-brand transition-all duration-300 group-hover:scale-105 group-hover:border-brand/50 group-hover:bg-brand group-hover:text-brand-foreground shadow-sm">
+                  <span
+                    className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-105 ${feature.tileBg}`}
+                  >
                     {feature.icon}
                   </span>
-                  <span className="font-mono text-[10px] font-bold text-slate-500">
-                    // {feature.id}
+                  <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-muted">
+                    {feature.id}
                   </span>
                 </div>
 
-                <h3 className="mt-5 text-base font-bold text-foreground tracking-tight">
+                <h3 className="mt-6 text-lg font-bold tracking-tight text-foreground">
                   {feature.title}
                 </h3>
-                <p className="mt-2 text-xs leading-relaxed text-muted">
+                <p className="mt-2.5 text-sm leading-relaxed text-muted">
                   {feature.description}
                 </p>
               </div>
 
-              <div className="mt-6 border-t border-border-default pt-3">
-                <span className="font-mono text-[10px] font-semibold uppercase text-brand tracking-wider">
-                  ✦ {feature.metric}
+              <div className="mt-6 border-t border-border-default pt-4">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1 text-xs font-semibold text-foreground">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#8B3DFF]" />
+                  {feature.metric}
                 </span>
               </div>
             </article>
@@ -116,4 +122,4 @@ export default function Features() {
       </div>
     </section>
   );
-}
+}

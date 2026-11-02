@@ -49,101 +49,98 @@ export default function ThreatFeed() {
   const last = offset + (data?.items.length ?? 0);
 
   return (
-    <section className={`${CARD} overflow-hidden`}>
-      <div className="flex flex-wrap items-center gap-3 border-b border-border-default p-5">
-        <div className="mr-auto">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-muted">Threat feed</h2>
-          <p className="mt-0.5 text-xs text-muted">
-            {total === 0 ? 'No matching analyses' : `Showing ${first}–${last} of ${total}`}
-          </p>
+    <section className={`${CARD} overflow-hidden p-5 sm:p-6`}>
+      <div className="flex flex-wrap items-center gap-3 pb-4">
+        <div className="mr-auto flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-foreground">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+            </svg>
+          </span>
+          <div>
+            <h2 className="tl-serif text-xl text-foreground">Threat Feed</h2>
+            <p className="text-xs text-muted">
+              {total === 0 ? 'No matching analyses' : `Showing ${first}–${last} of ${total}`}
+            </p>
+          </div>
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-muted">
-          Risk
-          <select
-            value={risk}
-            onChange={(e) => {
-              setRisk(e.target.value);
-              setOffset(0);
-            }}
-            className="rounded-lg border border-border-default bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-brand focus:outline-none"
-          >
-            {RISK_FILTERS.map((value) => (
-              <option key={value || 'all'} value={value}>
-                {value || 'All levels'}
-              </option>
-            ))}
-          </select>
-        </label>
+        <select
+          value={risk}
+          onChange={(e) => {
+            setRisk(e.target.value);
+            setOffset(0);
+          }}
+          className="rounded-full border border-border-default bg-surface-muted px-3.5 py-1.5 text-xs font-medium text-foreground focus:border-[#8B3DFF] focus:outline-none"
+        >
+          {RISK_FILTERS.map((value) => (
+            <option key={value || 'all'} value={value}>
+              {value ? `Risk: ${value}` : 'All risk levels'}
+            </option>
+          ))}
+        </select>
 
-        <label className="flex items-center gap-2 text-xs text-muted">
-          Input
-          <select
-            value={inputType}
-            onChange={(e) => {
-              setInputType(e.target.value);
-              setOffset(0);
-            }}
-            className="rounded-lg border border-border-default bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-brand focus:outline-none"
-          >
-            {INPUT_FILTERS.map((value) => (
-              <option key={value || 'all'} value={value}>
-                {value || 'All types'}
-              </option>
-            ))}
-          </select>
-        </label>
+        <select
+          value={inputType}
+          onChange={(e) => {
+            setInputType(e.target.value);
+            setOffset(0);
+          }}
+          className="rounded-full border border-border-default bg-surface-muted px-3.5 py-1.5 text-xs font-medium text-foreground focus:border-[#8B3DFF] focus:outline-none"
+        >
+          {INPUT_FILTERS.map((value) => (
+            <option key={value || 'all'} value={value}>
+              {value ? `Type: ${value}` : 'All input types'}
+            </option>
+          ))}
+        </select>
 
-        <button type="button" onClick={load} className={BTN.ghost}>
+        <button type="button" onClick={load} className={BTN.secondary}>
           Refresh
         </button>
       </div>
 
       {loading ? (
-        <div className="p-5">
-          <SkeletonRows rows={5} />
-        </div>
+        <SkeletonRows rows={5} />
       ) : error ? (
-        <div className="p-5">
-          <div
-            role="alert"
-            className="rounded-xl border border-risk-critical/30 bg-risk-critical/10 px-4 py-3 text-sm text-risk-critical"
-          >
-            {error}
-          </div>
+        <div
+          role="alert"
+          className="rounded-2xl border border-risk-critical/30 bg-[#FCE4E4] px-4 py-3 text-sm text-risk-critical"
+        >
+          {error}
         </div>
       ) : !data || data.items.length === 0 ? (
         <EmptyState title="Nothing to show" description="No analyses match the current filters." />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-left">
-            <thead className="bg-background-subtle text-[11px] uppercase tracking-wider text-muted">
-              <tr>
-                <th className="px-5 py-3 font-semibold">Risk</th>
-                <th className="px-5 py-3 font-semibold">Threat type</th>
-                <th className="px-5 py-3 font-semibold">Owner</th>
-                <th className="px-5 py-3 font-semibold">Input</th>
-                <th className="px-5 py-3 text-right font-semibold">Latency</th>
-                <th className="px-5 py-3 text-right font-semibold">When</th>
+          <table className="w-full min-w-[700px] border-collapse text-left">
+            <thead>
+              <tr className="rounded-xl bg-surface-muted text-xs font-medium text-muted">
+                <th className="rounded-l-xl px-4 py-2.5">Threat Type</th>
+                <th className="px-4 py-2.5">Owner</th>
+                <th className="px-4 py-2.5">Input</th>
+                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5 text-right">Latency</th>
+                <th className="rounded-r-xl px-4 py-2.5 text-right">When</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border-default">
               {data.items.map((item) => (
                 <tr
                   key={item.id}
                   onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                  className="cursor-pointer border-t border-border-default transition-colors hover:bg-background-subtle"
+                  className="cursor-pointer transition-colors hover:bg-surface-muted/50"
                 >
-                  <td className="px-5 py-3.5">
-                    <RiskBadge level={item.risk_level} score={item.risk_score} />
-                  </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-4 py-3.5">
                     <span className="text-sm font-semibold text-foreground">
                       {item.threat_type}
                     </span>
                     {item.campaign_flagged && (
-                      <span className="ml-2 rounded bg-brand/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-brand">
-                        campaign
+                      <span className="ml-2 rounded-full bg-[#A3F750] px-2 py-0.5 text-[10px] font-bold text-[#143300]">
+                        Campaign
                       </span>
                     )}
                     {expandedId === item.id && (
@@ -152,20 +149,23 @@ export default function ThreatFeed() {
                       </p>
                     )}
                   </td>
-                  <td className="max-w-[180px] truncate px-5 py-3.5 text-xs text-muted">
+                  <td className="max-w-[180px] truncate px-4 py-3.5 text-xs text-muted">
                     {item.user_email ?? `user #${item.user_id}`}
                   </td>
-                  <td className="px-5 py-3.5">
-                    <span className="rounded-md border border-border-default bg-surface-muted px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted">
+                  <td className="px-4 py-3.5">
+                    <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-medium uppercase text-muted">
                       {item.input_type}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-right text-xs tabular-nums text-muted">
+                  <td className="px-4 py-3.5">
+                    <RiskBadge level={item.risk_level} score={item.risk_score} />
+                  </td>
+                  <td className="px-4 py-3.5 text-right text-xs font-medium tabular-nums text-foreground">
                     {item.latency_ms === null || item.latency_ms === undefined
                       ? '—'
                       : `${Math.round(item.latency_ms)} ms`}
                   </td>
-                  <td className="px-5 py-3.5 text-right text-xs text-muted">
+                  <td className="px-4 py-3.5 text-right text-xs text-muted">
                     {relativeTime(item.created_at)}
                   </td>
                 </tr>
@@ -176,7 +176,7 @@ export default function ThreatFeed() {
       )}
 
       {total > PAGE_SIZE && (
-        <div className="flex items-center justify-between gap-3 border-t border-border-default p-4">
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-border-default pt-4">
           <button
             type="button"
             onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
