@@ -8,9 +8,9 @@ ENV PIP_INDEX_URL=$PIP_INDEX_URL \
     PIP_DEFAULT_TIMEOUT=120 \
     PYTHONPATH=/srv/trustlayer:/srv/trustlayer/backend
 
-# Tesseract for the OCR (vision) service
+# Tesseract for OCR (vision) service + curl for probes + postgresql-client for backups
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr tesseract-ocr-eng curl \
+    tesseract-ocr tesseract-ocr-eng curl postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -25,9 +25,11 @@ COPY backend backend
 COPY services services
 COPY ml ml
 
-# Use existing model if present, or generate & train if missing
+# Use existing model if present, or generate, train & evaluate if missing
 RUN if [ ! -f ml/models/scam_model.joblib ]; then \
-        python -m ml.training.generate_dataset && python -m ml.training.train_model; \
+        python -m ml.training.generate_dataset && \
+        python -m ml.training.train_model && \
+        python -m ml.evaluation.evaluate; \
     fi
 
 ENV APP_ENV=production DEBUG=false WEB_CONCURRENCY=2
@@ -38,4 +40,4 @@ RUN useradd -m appuser && chown -R appuser /srv/trustlayer
 USER appuser
 
 EXPOSE 8000
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --workers ${WEB_CONCURRENCY:-2}"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --workers ${WEB_CONCURRENCY:-2}"]

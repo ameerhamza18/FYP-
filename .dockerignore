@@ -1,5 +1,6 @@
 # Build context exclusions (context = repo root, see docker-compose.yml)
 **/__pycache__
+**/.pytest_cache
 **/.venv
 **/venv
 **/.env
@@ -9,10 +10,17 @@
 **/*.tsbuildinfo
 **/*.db
 **/*.sqlite3
+**/*.sqlite
+backups/
 apps/
 docs/
 tests/
 .git
 .github
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.pdf
+**/*.backup.py
 **/.DS_Store
 **/Thumbs.db

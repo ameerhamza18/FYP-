@@ -176,6 +176,9 @@ def _bootstrap_admin() -> None:
                         role="admin"))
             db.commit()
             logger.info("Bootstrap admin created: %s", settings.admin_email)
+    except Exception as exc:
+        db.rollback()
+        logger.info("Bootstrap admin initialization skipped or already present: %s", exc)
     finally:
         db.close()
 

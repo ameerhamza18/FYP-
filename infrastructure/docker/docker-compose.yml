@@ -46,9 +46,15 @@ services:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in infrastructure/docker/.env}
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in infrastructure/docker/.env}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080,http://localhost:3001,http://127.0.0.1:3001}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@trustlayer.local}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@trustlayer.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in infrastructure/docker/.env}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RETENTION_ANALYSIS_DAYS: ${RETENTION_ANALYSIS_DAYS:-90}
+      RETENTION_AUDIT_DAYS: ${RETENTION_AUDIT_DAYS:-365}
+      AUDIT_LOG_APPEND_ONLY: ${AUDIT_LOG_APPEND_ONLY:-true}
+      ZERO_STORAGE_MODE: ${ZERO_STORAGE_MODE:-false}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      CAMPAIGN_WEBHOOK_URL: ${CAMPAIGN_WEBHOOK_URL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
       GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
@@ -64,7 +70,7 @@ services:
     ports:
       - "8001:8000"   # host 8001 → container 8000
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).status==200 else 1)\""]
       interval: 15s
       timeout: 5s
       retries: 5

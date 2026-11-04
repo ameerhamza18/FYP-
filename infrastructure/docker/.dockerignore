@@ -1,5 +1,6 @@
 # Build context exclusions
 **/__pycache__
+**/.pytest_cache
 **/.venv
 **/venv
 **/.env
@@ -9,13 +10,17 @@
 **/*.tsbuildinfo
 **/*.db
 **/*.sqlite3
-ml/models/*.joblib
-ml/data/*.csv
-ml/evaluation/reports
+**/*.sqlite
+backups/
 apps/
 docs/
 tests/
 .git
 .github
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.pdf
+**/*.backup.py
 **/.DS_Store
 **/Thumbs.db
