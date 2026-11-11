@@ -197,6 +197,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _handleInterception(InterceptedMessage message, {bool showResult = true}) {
     if (!mounted) return;
+    if (message.isImage) {
+      _snack('Received shared screenshot — running RAM OCR & threat scan…');
+      _run(
+        () => _api.analyzeScreenshot(XFile(message.imagePath!)),
+        showResult: showResult,
+        statusMsg: 'Extracting text from shared screenshot & scanning…',
+      );
+      return;
+    }
     _snack('Intercepted a ${_sourceLabel(message.source)} message — checking with TrustLayer…');
     _run(
       () => _api.analyzeText(

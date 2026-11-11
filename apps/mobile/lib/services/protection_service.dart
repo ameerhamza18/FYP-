@@ -3,12 +3,13 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// A message the OS-level interceptors pulled in from outside the app.
+/// A message or shared image the OS-level interceptors pulled in from outside the app.
 class InterceptedMessage {
   final String text;
   final String? sender;
+  final String? imagePath;
 
-  /// sms | whatsapp | telegram | instagram | facebook | notification | share
+  /// sms | whatsapp | telegram | instagram | facebook | notification | share | share-image
   final String source;
 
   /// Verdict of the on-device engine that caught it (CRITICAL/HIGH/MEDIUM).
@@ -19,9 +20,12 @@ class InterceptedMessage {
     required this.text,
     required this.source,
     this.sender,
+    this.imagePath,
     this.localRisk,
     this.localReasons = const [],
   });
+
+  bool get isImage => imagePath != null && imagePath!.trim().isNotEmpty;
 
   factory InterceptedMessage.fromMap(Map<dynamic, dynamic> map) {
     final reasons = map['localReasons'];
@@ -29,6 +33,7 @@ class InterceptedMessage {
       text: (map['text'] ?? '').toString(),
       source: (map['source'] ?? 'notification').toString(),
       sender: map['sender']?.toString(),
+      imagePath: map['imagePath']?.toString(),
       localRisk: map['localRisk']?.toString(),
       localReasons: reasons is List ? reasons.map((e) => e.toString()).toList() : const [],
     );
@@ -83,40 +88,23 @@ class ProtectionStatus {
       );
 }
 
-
-
 /// Client for TrustLayer's OS-level interception layer.
-///
-/// Wraps the `com.trustlayer.app/interception` MethodChannel so the UI has one
-/// place to ask "am I actually protected?", to request the permissions that
-/// automatic interception needs, and to receive intercepted messages.
-///
-/// The Kotlin side answers an interception with `true` **only** when the app is
-/// alive and has accepted it; otherwise it raises its own warning notification
-/// and buffers the message for replay. That contract is what makes the app's
-/// protection work while it is closed, so every handler here must return `true`.
 class ProtectionService {
   ProtectionService._();
 
   static const MethodChannel _channel = MethodChannel('com.trustlayer.app/interception');
 
-  /// Quiet mode is persisted in Dart (so it survives reinstalls of the setting
-  /// UI) and mirrored to Kotlin, which needs it while the app is not running.
   static const String _quietModeKey = 'protection_quiet_mode';
 
   static final StreamController<ProtectionStatus> _statuses =
       StreamController<ProtectionStatus>.broadcast();
 
-  /// Live protection status; the UI listens so permission changes made in system
-  /// settings are reflected as soon as the user comes back.
   static Stream<ProtectionStatus> get statusStream => _statuses.stream;
 
   static void Function(InterceptedMessage message)? onIntercepted;
 
   static bool _handlerInstalled = false;
 
-  /// Wires the channel and replays anything intercepted while the app was closed.
-  /// Safe to call more than once.
   static Future<void> initialize({
     required void Function(InterceptedMessage message) onIntercepted,
   }) async {
@@ -125,7 +113,6 @@ class ProtectionService {
       _channel.setMethodCallHandler(_handleCall);
       _handlerInstalled = true;
     }
-    // Keep the platform copy of quiet mode in sync with the stored preference.
     await setQuietMode(await loadQuietMode());
   }
 
@@ -137,15 +124,34 @@ class ProtectionService {
           final message = InterceptedMessage.fromMap(args);
           if (message.text.trim().isNotEmpty) {
             onIntercepted?.call(message);
-            return true; // accepted: the platform must not double-alert
+            return true;
           }
         }
         return false;
       case 'onSharedTextReceived':
-        final text = call.arguments?.toString() ?? '';
+        final args = call.arguments;
+        if (args is Map) {
+          final message = InterceptedMessage.fromMap(args);
+          if (message.text.trim().isNotEmpty) {
+            onIntercepted?.call(message);
+            return true;
+          }
+          return false;
+        }
+        final text = args?.toString() ?? '';
         if (text.trim().isEmpty) return false;
         onIntercepted?.call(InterceptedMessage(text: text, source: 'share'));
         return true;
+      case 'onSharedImageReceived':
+        final args = call.arguments;
+        if (args is Map) {
+          final message = InterceptedMessage.fromMap(args);
+          if (message.isImage) {
+            onIntercepted?.call(message);
+            return true;
+          }
+        }
+        return false;
       case 'onProtectionStatusChanged':
         final args = call.arguments;
         if (args is Map) _statuses.add(ProtectionStatus.fromMap(args));
@@ -154,8 +160,6 @@ class ProtectionService {
     return null;
   }
 
-  /// Current status, or [ProtectionStatus.unknown] when the platform channel is
-  /// not available (older build, iOS, widget tests).
   static Future<ProtectionStatus> status() async {
     try {
       final result = await _channel.invokeMethod<dynamic>('getProtectionStatus');
@@ -172,7 +176,6 @@ class ProtectionService {
     return ProtectionStatus.unknown;
   }
 
-  /// True when a runtime dialog was actually needed and shown.
   static Future<void> requestSmsPermission() =>
       _invoke('requestSmsPermission');
 
@@ -185,13 +188,13 @@ class ProtectionService {
   static Future<void> openAppNotificationSettings() =>
       _invoke('openAppNotificationSettings');
 
-  /// Reads and clears the cold-start payload (shared link / notification tap).
+  /// Reads and clears the cold-start payload (shared link / shared image / notification tap).
   static Future<InterceptedMessage?> takeInitialInterception() async {
     try {
       final result = await _channel.invokeMethod<dynamic>('getInitialInterceptedText');
       if (result is Map) {
         final message = InterceptedMessage.fromMap(result);
-        if (message.text.trim().isNotEmpty) return message;
+        if (message.text.trim().isNotEmpty || message.isImage) return message;
       }
     } on MissingPluginException {
       return null;
@@ -201,8 +204,6 @@ class ProtectionService {
     return null;
   }
 
-  /// Replays messages intercepted while the app was closed or the backend was
-  /// unreachable. Returns them oldest-first and clears the on-device buffer.
   static Future<List<InterceptedMessage>> drainPendingInterceptions() async {
     try {
       final result = await _channel.invokeMethod<dynamic>('drainPendingInterceptions');
@@ -226,8 +227,6 @@ class ProtectionService {
     return prefs.getBool(_quietModeKey) ?? false;
   }
 
-  /// Quiet mode hides the original message notification for flagged content, so
-  /// nothing about the scam is visible until the user reads TrustLayer's warning.
   static Future<void> setQuietMode(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_quietModeKey, enabled);
@@ -249,10 +248,9 @@ class ProtectionService {
       // Settings screens are unavailable on some OEM ROMs; never crash the UI.
     }
   }
+
   static Future<void> openBatteryOptimizationSettings() =>
       _invoke('openBatteryOptimizationSettings');
 
-  /// Posts a sample scam warning so the user can verify alerts really appear.
   static Future<void> showTestAlert() => _invoke('showTestAlert');
 }
-

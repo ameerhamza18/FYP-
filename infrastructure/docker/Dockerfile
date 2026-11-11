@@ -8,9 +8,9 @@ ENV PIP_INDEX_URL=$PIP_INDEX_URL \
     PIP_DEFAULT_TIMEOUT=120 \
     PYTHONPATH=/srv/trustlayer:/srv/trustlayer/backend
 
-# Tesseract for OCR (vision) service + curl for probes + postgresql-client for backups
+# Tesseract for OCR (vision) service (English + Urdu script) + curl for probes + postgresql-client for backups
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr tesseract-ocr-eng curl postgresql-client \
+    tesseract-ocr tesseract-ocr-eng tesseract-ocr-urd curl postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 

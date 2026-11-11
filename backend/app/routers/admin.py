@@ -32,9 +32,13 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 RISK_LEVELS = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
 INPUT_TYPES = ("text", "url", "screenshot")
 
+_last_ioc_sync_monotonic: float = 0.0
+_IOC_SYNC_TTL_SECONDS: float = 5.0
+
 
 def sync_db_iocs_to_memory(db: Session) -> None:
     """Synchronize active custom ThreatIOC rows from DB into threat_intel & sender_intel."""
+    global _last_ioc_sync_monotonic
     active_rows = db.query(ThreatIOC).filter(ThreatIOC.is_active.is_(True)).all()
     domains = {r.value: r.description for r in active_rows if r.ioc_type == "domain"}
     keywords = [(r.value, r.description) for r in active_rows if r.ioc_type == "keyword"]
@@ -42,6 +46,18 @@ def sync_db_iocs_to_memory(db: Session) -> None:
 
     threat_intel.reset_and_sync_custom_iocs(domains=domains, keywords=keywords)
     sender_intel.reset_and_sync_custom_senders(custom_senders=senders)
+    import time as _time
+    _last_ioc_sync_monotonic = _time.monotonic()
+
+
+def ensure_iocs_synced(db: Session, ttl_seconds: float = _IOC_SYNC_TTL_SECONDS) -> None:
+    """Ensure multi-worker processes refresh custom DB IOCs within a short TTL window."""
+    import time as _time
+    if (_time.monotonic() - _last_ioc_sync_monotonic) >= ttl_seconds:
+        try:
+            sync_db_iocs_to_memory(db)
+        except Exception:
+            pass
 
 
 def _normalize_ioc_value(ioc_type: str, raw_value: str) -> str:

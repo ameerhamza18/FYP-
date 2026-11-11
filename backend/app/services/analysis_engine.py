@@ -234,6 +234,10 @@ def analyze_content(
     started = time.perf_counter()
     cfg = get_settings()
 
+    # Ensure custom SOC IOCs are fresh across all multi-worker processes
+    from app.routers.admin import ensure_iocs_synced
+    ensure_iocs_synced(db)
+
     # ---------- 1. 4-Step Preprocessing & Entity Extraction ----------
     prep = preprocessing.preprocess_pipeline(text)
     entities = preprocessing.extract_entities(text)

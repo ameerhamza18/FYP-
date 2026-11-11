@@ -12,12 +12,14 @@ import json
 import threading
 from typing import Any, Dict, Optional
 
+from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import AuditLog, GENESIS_AUDIT_HASH
 
 _audit_lock = threading.Lock()
+_PG_AUDIT_ADVISORY_LOCK_ID = 84729103
 
 
 def canonicalize_timestamp(ts: dt.datetime) -> str:
@@ -67,6 +69,12 @@ def audit(
     """Record a security-relevant event chained via HMAC-SHA256. Never raises."""
     try:
         with _audit_lock:
+            bind = db.get_bind()
+            if bind is not None and getattr(bind.dialect, "name", "") == "postgresql":
+                db.execute(
+                    sql_text("SELECT pg_advisory_xact_lock(:lock_id)"),
+                    {"lock_id": _PG_AUDIT_ADVISORY_LOCK_ID},
+                )
             now = dt.datetime.now(dt.timezone.utc)
             last = db.query(AuditLog).order_by(AuditLog.id.desc()).first()
             prev_sig = (

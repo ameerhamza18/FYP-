@@ -63,6 +63,27 @@ _revocation_lock = threading.Lock()
 _login_failures: dict[str, list[float]] = {}
 _lockout_lock = threading.Lock()
 
+_redis_client_cache: dict[str, object] = {}
+_redis_lock = threading.Lock()
+
+
+def _get_redis_client():
+    """Return a pooled Redis client for the configured REDIS_URL, or None if unavailable."""
+    cfg = get_settings()
+    if not cfg.redis_url:
+        return None
+    with _redis_lock:
+        client = _redis_client_cache.get(cfg.redis_url)
+        if client is None:
+            import redis
+            client = redis.Redis.from_url(
+                cfg.redis_url,
+                socket_timeout=1.0,
+                socket_connect_timeout=1.0,
+            )
+            _redis_client_cache[cfg.redis_url] = client
+        return client
+
 
 def is_account_locked(email: str) -> tuple[bool, int]:
     """Check whether an email account is currently locked out due to failed logins.
@@ -76,10 +97,9 @@ def is_account_locked(email: str) -> tuple[bool, int]:
     max_failures = max(1, cfg.login_max_failures)
     window = max(1, cfg.login_lockout_seconds)
 
-    if cfg.redis_url:
+    r = _get_redis_client()
+    if r is not None:
         try:
-            import redis
-            r = redis.Redis.from_url(cfg.redis_url, socket_timeout=1.0)
             key = f"login_lockout:{norm}"
             now = time.time()
             r.zremrangebyscore(key, 0, now - window)
@@ -114,10 +134,9 @@ def record_login_failure(email: str) -> tuple[bool, int]:
     max_failures = max(1, cfg.login_max_failures)
     window = max(1, cfg.login_lockout_seconds)
 
-    if cfg.redis_url:
+    r = _get_redis_client()
+    if r is not None:
         try:
-            import redis
-            r = redis.Redis.from_url(cfg.redis_url, socket_timeout=1.0)
             key = f"login_lockout:{norm}"
             now = time.time()
             pipe = r.pipeline()
@@ -150,11 +169,9 @@ def clear_login_failures(email: str) -> None:
     norm = (email or "").strip().lower()
     if not norm:
         return
-    cfg = get_settings()
-    if cfg.redis_url:
+    r = _get_redis_client()
+    if r is not None:
         try:
-            import redis
-            r = redis.Redis.from_url(cfg.redis_url, socket_timeout=1.0)
             r.delete(f"login_lockout:{norm}")
         except Exception:
             pass
@@ -180,10 +197,9 @@ def revoke_token(jti: str, ttl_seconds: int = 3600) -> None:
         for k in expired:
             del _revoked_jtis[k]
 
-    if settings.redis_url:
+    r = _get_redis_client()
+    if r is not None:
         try:
-            import redis
-            r = redis.Redis.from_url(settings.redis_url)
             r.setex(f"revoked:jti:{jti}", ttl_seconds, "1")
         except Exception:
             pass
@@ -198,10 +214,9 @@ def is_token_revoked(jti: str) -> bool:
                 return True
             del _revoked_jtis[jti]
 
-    if settings.redis_url:
+    r = _get_redis_client()
+    if r is not None:
         try:
-            import redis
-            r = redis.Redis.from_url(settings.redis_url)
             if r.exists(f"revoked:jti:{jti}"):
                 return True
         except Exception:

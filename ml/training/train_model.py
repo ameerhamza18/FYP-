@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 import joblib
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -86,7 +87,8 @@ def build_pipeline() -> Pipeline:
             ),
         ),
     ])
-    clf = LogisticRegression(C=3.0, max_iter=1000, class_weight="balanced")
+    base_clf = LogisticRegression(C=3.0, max_iter=1000, class_weight="balanced")
+    clf = CalibratedClassifierCV(estimator=base_clf, method="sigmoid", cv=3)
     return Pipeline([("features", features), ("clf", clf)])
 
 

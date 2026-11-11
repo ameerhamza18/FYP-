@@ -14,9 +14,18 @@ Security posture (OWASP API Top 10 alignment):
 import asyncio
 import contextlib
 import logging
+import sys
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Ensure both repo root (for `services.*`) and backend/ (for `app.*`) are importable
+# regardless of the current working directory.
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+for _p in (str(_REPO_ROOT), str(_BACKEND_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
